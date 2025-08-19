@@ -16,7 +16,7 @@ This project is a Retrieval-Augmented Generation (RAG) chatbot designed to answe
 
 ## The Problem
 
-Students often have specific questions about university policies, academic rules, and application procedures. However, this critical information is typically scattered across a multitude of documents—such as student handbooks, academic calendars, fee structures, and policy PDFs. Finding a precise answer requires navigating this disorganized collection of files, where a simple keyword search is often insufficient for complex or nuanced queries. This project aims to solve that problem by creating a centralized, intelligent interface that can understand and answer questions using this entire collection of documents as its single source of truth.
+Students often have specific questions about university policies, academic rules, and application procedures. However, this critical information is typically scattered across a multitude of documents, such as student handbooks, academic calendars, fee structures, and policy PDFs. Finding a precise answer requires navigating this disorganized collection of files, where a simple keyword search is often insufficient for complex or nuanced queries. This project aims to solve that problem by creating a centralized, intelligent interface that can understand and answer questions using this entire collection of documents as its single source of truth.
 
 ## The Solution: A RAG Pipeline
 
