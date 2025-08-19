@@ -53,13 +53,13 @@ A key focus of this project was using quantitative data to drive improvements. T
 
 - **Hypothesis:** Smaller, more contextually-aware chunks would fix the retrieval failures.
 - **Strategy:** Reduced `chunk_size` to 500 and enriched each chunk with source document metadata.
-- **Result:** **Excellent Context Recall (0.71)**, but **poor Context Precision (0.48)**. The system found the right information but also retrieved a lot of irrelevant "noise."
+- **Result:** **Excellent Context Recall (0.778)**, but **poor Context Precision (0.489)**. The system found the right information but also retrieved a lot of irrelevant "noise."
 
 ### Run 3: Final Optimized Pipeline
 
 - **Hypothesis:** The re-ranker could filter out the noise if it had more options to choose from.
 - **Strategy:** Increased the initial retrieval net by increasing the candidate pool from 10 to 20 documents, giving the Cross-Encoder more to analyze and discard.
-- **Result:** **Balanced Performance**. Maintained high **Context Recall (0.71)** while significantly improving **Context Precision (0.73)**, resulting in the best-performing version of the pipeline.
+- **Result:** **Balanced Performance**. Maintained high **Context Recall (0.778)** while significantly improving **Context Precision (0.678)**, resulting in the best-performing version of the pipeline.
 
 ## System Architecture
 
