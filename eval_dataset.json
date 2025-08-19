@@ -1,0 +1,62 @@
+[
+  {
+    "question": "What are the tuition fees for the Artificial Intelligence programme for an international student?",
+    "ground_truth": "The tuition fee for the Bachelor of Engineering in Artificial Intelligence programme for international students is RM 30,000 per year."
+  },
+  {
+    "question": "What are the steps to apply for on-campus accommodation?",
+    "ground_truth": "To apply for on-campus accommodation, students must first receive an offer letter from the university, then apply for on-campus accommodation at XMUM. You can submit an email application or a paper application. An application fee of RM 100 (non-refundable) will be charged."
+  },
+  {
+    "question": "How much are the undergraduate tuition fees for local or Malaysian students?",
+    "ground_truth": "For local or Malaysian students, tuition fees range between RM 26,000 to RM 29,000 per year depending on the programme."
+  },
+  {
+    "question": "What is the university's policy on plagiarism?",
+    "ground_truth": "All coursework must be a student's own effort. Using AI tools without acknowledgement, copying, or collusion are considered serious offenses that can result in a penalty, such as receiving a zero mark for the assignment. Students must properly acknowledge all sources."
+  },
+  {
+    "question": "What undergraduate programmes are offered at XMUM?",
+    "ground_truth": "XMUM offers undergraduate programmes in Arts & Social Sciences (e.g., Journalism), Business (e.g., International Business, Finance), Engineering & Technology (e.g., Artificial Intelligence, Chemical Engineering), and Sciences (e.g., Marine Biotechnology)."
+  },
+  {
+    "question": "How much is the on-campus accommodation fee?",
+    "ground_truth": "The updated monthly rates for hostel accommodation are RM 360 for Block D and RM 460 for Block LY, effective from 1st January 2026."
+  },
+  {
+    "question": "Is there a scholarship available for students?",
+    "ground_truth": "Yes, XMUM offers several types of financial aid. These include Merit Scholarships based on academic results from entry qualifications (like SPM, UEC, A-Level), an XMUM Progression Scholarship for students moving from foundation to degree programmes, and Study Grants such as the Teacher's Children Grant and Sibling Grant."
+  },
+  {
+    "question": "Does XMUM provide transportation for students?",
+    "ground_truth": "No, XMUM does not provide transportation for its students."
+  },
+  {
+    "question": "What are the tuition fees of the undergraduate Finance programme?",
+    "ground_truth": "For local students it is RM 26,000 per year, and RM 27,000 for international students."
+  },
+  {
+    "question": "How to apply for a room change?",
+    "ground_truth": "1. Login to AskA.\n2. Select the menu.\n3. Select Room Change Request.\n4. Click 'Apply' and fill up your request with a valid reason."
+  },
+  {
+    "question": "How much does it cost to retake a course?",
+    "ground_truth": "The fee for retaking a course is based on the course type and is charged per credit hour. Arts and Business courses are RM 500.00 per credit hour, while Science courses are RM 550.00 per credit hour."
+  },
+  {
+    "question": "What is the maximum credit hour for a long semester?",
+    "ground_truth": "The maximum credit hour for a long semester is 21."
+  },
+  {
+    "question": "What is the maximum credit hour for a short semester?",
+    "ground_truth": "The maximum credit hour for a short semester is 7."
+  },
+  {
+    "question": "If I have an emergency in the hostel room, who should I contact?",
+    "ground_truth": "For general maintenance, contact the Maintenance Hotline at 017-313 5947. For safety and security, the Security Hotline is 019-348 9999. For other emergencies outside office hours, contact the Assistant Warden Hotline at 013-517 6801."
+  },
+  {
+    "question": "What are the available foundation programmes?",
+    "ground_truth": "1. Foundation in Arts and Social Science\n2. Foundation in Information Technology\n3. Foundation in Science"
+  }
+]
