@@ -12,7 +12,6 @@ An intelligent chatbot designed to answer questions about the Xiamen University 
   - [Run 1: Baseline Performance](#run-1-baseline-performance)
   - [Run 2: Advanced Chunking](#run-2-advanced-chunking)
   - [Run 3: Final Optimized Pipeline](#run-3-final-optimized-pipeline)
-- [System Architecture](#system-architecture)
 
 ## The Problem
 
@@ -61,35 +60,6 @@ A key focus of this project was using quantitative data to drive improvements. T
 - **Strategy:** Increased the initial retrieval net by increasing the candidate pool from 10 to 20 documents, giving the Cross-Encoder more to analyze and discard.
 - **Result:** **Balanced Performance**. Maintained high **Context Recall (0.711)** while significantly improving **Context Precision (0.744)**, resulting in the best-performing version of the pipeline.
 
-## System Architecture
-
-The application is designed with a decoupled frontend and backend. The user interacts with the Streamlit UI, which sends requests to the FastAPI API. The API then processes the query through the full RAG pipeline to generate and return an answer.
-
-```mermaid
-flowchart TD
-    A[Documents: PDF/DOCX/TXT] -->|Extraction & OCR| B[Preprocessing & Chunking]
-    B --> C[Embeddings: MiniLM]
-    C --> D[ChromaDB Vector Store]
-
-    subgraph Retrieval
-        E[User Query] --> F[Query Embedding]
-        F --> G[ChromaDB Search (Top 20)]
-        G --> H[Cross-Encoder Reranking]
-        H --> I[Top 3 Chunks]
-    end
-
-    I --> J[Groq Llama3 LLM]
-    E --> J
-    J --> K[Final Answer]
-
-    subgraph Evaluation
-        L[Eval Dataset] --> M[RAGAS Evaluation]
-        K --> M
-        I --> M
-    end
-
-    K --> N[FastAPI Backend]
-    N --> O[Streamlit Chat UI]
 
 
     
