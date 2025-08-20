@@ -31,13 +31,13 @@ The system works as follows:
 
 ## Key Features & Technical Stack
 
-- **Backend API:** FastAPI
-- **Frontend UI:** Streamlit
-- **LLM:** Llama3-8B
+- **Backend API:** FastAPI - Manages embeddings, reranking, and response generation. Returns final chatbot answer via /ask endpoint.
+- **Frontend UI:** Streamlit - Provides chatbot UI. Sends query → gets response from FastAPI.
+- **LLM:** Llama3-8B - Includes rate limit handling with tenacity retry logic + exponential backoff.
 - **Vector Database:** ChromaDB
 - **Embedding Model:** `all-MiniLM-L6-v2`
 - **Re-ranking Model:** `cross-encoder/ms-marco-MiniLM-L-6-v2`
-- **Evaluation Framework:** Ragas (`faithfulness`, `answer_relevancy`, `context_recall`, `context_precision`)
+- **Evaluation Framework:** Ragas (`faithfulness`, `answer_relevancy`, `context_recall`, `context_precision`) - Uses ChatGroq (Llama3) as the evaluation judge.
 - **Document Processing:** PyMuPDF, python-docx, Pytesseract (for OCR)
 
 ## The Evaluation Journey
@@ -66,33 +66,30 @@ A key focus of this project was using quantitative data to drive improvements. T
 The application is designed with a decoupled frontend and backend. The user interacts with the Streamlit UI, which sends requests to the FastAPI API. The API then processes the query through the full RAG pipeline to generate and return an answer.
 
 ```mermaid
-graph TD
-    subgraph "Frontend"
-        A["User Interface (Streamlit)"]
+flowchart TD
+    A[Documents: PDF/DOCX/TXT] -->|Extraction & OCR| B[Preprocessing & Chunking]
+    B --> C[Embeddings: MiniLM]
+    C --> D[ChromaDB Vector Store]
+
+    subgraph Retrieval
+        E[User Query] --> F[Query Embedding]
+        F --> G[ChromaDB Search (Top 20)]
+        G --> H[Cross-Encoder Reranking]
+        H --> I[Top 3 Chunks]
     end
 
-    subgraph "Backend API"
-        B["FastAPI Endpoint (/ask)"]
+    I --> J[Groq Llama3 LLM]
+    E --> J
+    J --> K[Final Answer]
+
+    subgraph Evaluation
+        L[Eval Dataset] --> M[RAGAS Evaluation]
+        K --> M
+        I --> M
     end
 
-    subgraph "RAG Pipeline"
-        C{"1. Retrieve & Re-rank"}
-        D["2. Generate Response"]
-    end
+    K --> N[FastAPI Backend]
+    N --> O[Streamlit Chat UI]
 
-    subgraph "Data & Models"
-        E["Vector Store (ChromaDB)"]
-        F["Embedding & Cross-Encoder Models"]
-        G["LLM (Groq API - Llama 3)"]
-    end
 
-    A -- "POST /ask with query" --> B
-    B -- "User Query" --> C
-    C -- "Embedded Query" --> E
-    E -- "Top 20 Chunks" --> C
-    C -- "Re-ranked Top 3 Chunks" --> D
-    F -- "Models" --> C
-    D -- "Context + Query" --> G
-    G -- "Generated Answer" --> D
-    D -- "Final Answer" --> B
-    B -- "JSON Response" --> A
+    
