@@ -88,7 +88,7 @@ graph TD
 
     A -- "POST /ask with query" --> B
     B -- "User Query" --> C
-    C -- "Query + Chunks" --> E
+    C -- "Embedded Query" --> E
     E -- "Top 20 Chunks" --> C
     C -- "Re-ranked Top 3 Chunks" --> D
     F -- "Models" --> C
