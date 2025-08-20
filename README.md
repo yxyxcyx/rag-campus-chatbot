@@ -68,22 +68,22 @@ The application is designed with a decoupled frontend and backend. The user inte
 ```mermaid
 graph TD
     subgraph "Frontend"
-        A[User Interface (Streamlit)]
+        A["User Interface (Streamlit)"]
     end
 
     subgraph "Backend API"
-        B[FastAPI Endpoint (/ask)]
+        B["FastAPI Endpoint (/ask)"]
     end
 
     subgraph "RAG Pipeline"
-        C{1. Retrieve & Re-rank}
-        D[2. Generate Response]
+        C{"1. Retrieve & Re-rank"}
+        D["2. Generate Response"]
     end
 
     subgraph "Data & Models"
-        E[Vector Store (ChromaDB)]
-        F[Embedding & Cross-Encoder Models]
-        G[LLM (Groq API - Llama 3)]
+        E["Vector Store (ChromaDB)"]
+        F["Embedding & Cross-Encoder Models"]
+        G["LLM (Groq API - Llama 3)"]
     end
 
     A -- "POST /ask with query" --> B
