@@ -1,13 +1,19 @@
 # A Retreival-Augmented Generation (RAG) Chatbot
 
-An intelligent chatbot designed to answer questions about the Xiamen University Malaysia (XMUM) information and policy. This project leverages a Retrieval-Augmented Generation (RAG) pipeline to provide accurate, context-aware answers from a local knowledge base.
+This project is a complete Retrieval-Augmented Generation (RAG) system designed to function as an AI chatbot for Xiamen University Malaysia (XMUM). It answers user questions based on a collection of documents, such as the XMUM student handbook and related materials.
+
+The system is broken down into four key parts:
+1.  **Core RAG Logic (`rag_pipeline.py`):** The engine that performs the data processing, retrieval, and answer generation.
+2.  **API Server (`main.py`):** A backend service built with FastAPI that exposes the RAG engine to the internet, allowing other applications to "ask" it questions.
+3.  **User Interface (`app.py`):** A user-friendly web-based chatbot interface built with Streamlit that communicates with the API server.
+4.  **Evaluation (`evaluate.py`):** A pipeline to rigorously test and measure the performance and accuracy of the RAG system using the RAGAS framework.
 
 ![Chatbot Interface](UI.png)
 
 ## Table of Contents
 - [The Problem](#the-problem)
 - [The Solution](#the-solution)
-- [Key Features & Technical Stack](#key-features--technical-stack)
+- [Technical Stack](#technical-stack)
 - [The Evaluation Journey](#the-evaluation-journey)
   - [Run 1: Baseline Performance](#run-1-baseline-performance)
   - [Run 2: Advanced Chunking](#run-2-advanced-chunking)
@@ -15,29 +21,53 @@ An intelligent chatbot designed to answer questions about the Xiamen University 
 
 ## The Problem
 
-Students often have specific questions about university policies, academic rules, and application procedures. However, this critical information is typically scattered across a multitude of documents, such as student handbooks, academic calendars, fee structures, and policy PDFs. Finding a precise answer requires navigating this disorganized collection of files, where a simple keyword search is often insufficient for complex or nuanced queries. This project aims to solve that problem by creating a centralized, intelligent interface that can understand and answer questions using this entire collection of documents as its single source of truth.
+Students and staff often have specific questions about university policies, academic rules, and application procedures. This critical information is typically scattered across a multitude of documents, such as student handbooks, academic calendars, and policy. Finding a precise answer requires navigating this disorganized collection of files, where a simple keyword search is often insufficient for complex or nuanced queries. This project solves that problem by creating a centralized, intelligent interface that can understand and answer questions using this entire collection of documents as its single source of truth.
 
 ## The Solution
 
 A Retrieval-Augmented Generation (RAG) pipeline was chosen as the ideal architecture. This approach grounds the Large Language Model (LLM) in a specific set of documents, preventing hallucinations and ensuring that the answers are factual and based solely on the provided context.
 
-The system works as follows:
-1.  **Ingestion:** Documents (PDFs, DOCX, TXT) are loaded, and text is extracted using a hybrid OCR/direct-extraction method for maximum efficiency.
-2.  **Chunking & Embedding:** The text is segmented into small, metadata-enriched chunks and converted into vector embeddings using `all-MiniLM-L6-v2`.
-3.  **Storage:** These embeddings are stored in a ChromaDB vector database for fast semantic search.
-4.  **Retrieval & Re-ranking:** When a user asks a question, the system first retrieves a broad set of 20 potentially relevant chunks  and then uses a Cross-Encoder model to re-rank them for precision.
-5.  **Generation:** The top 3 most relevant chunks are fed as context to a Llama3-8B model via the Groq API, which generates a final, concise answer.
+The system operates in two main phases: a one-time data ingestion and the real-time query cycle.
 
-## Key Features & Technical Stack
+#### Phase 1: Data Ingestion & Indexing (One-time Setup)
+This process runs automatically when the API server starts if the vector database is empty.
+1.  **Load Documents:** The system scans a `data/` folder and extracts text from `.pdf`, `.docx`, and `.txt` files. It uses a hybrid approach: direct text extraction is tried first, with OCR (Tesseract) as a fallback for image-based PDFs.
+2.  **Chunk Text:** The extracted text is segmented into small, overlapping chunks of 500 characters. Each chunk is enriched with metadata identifying its source document.
+3.  **Embed & Store:** Each text chunk is converted into a numerical vector (embedding) using the `all-MiniLM-L6-v2` model. These embeddings are then stored in a ChromaDB database, creating a searchable knowledge library.
 
-- **Backend API:** FastAPI - Manages embeddings, reranking, and response generation. Returns final chatbot answer via /ask endpoint.
-- **Frontend UI:** Streamlit - Provides chatbot UI. Sends query → gets response from FastAPI.
-- **LLM:** Llama3-8B - Includes rate limit handling with tenacity retry logic + exponential backoff.
+#### Phase 2: Real-time Querying (Answering a Question)
+1.  **API Call:** The Streamlit UI sends the user's question to the `/ask` endpoint of the FastAPI backend.
+2.  **Two-Stage Retrieval:**
+    * **Stage 1 (Broad Retrieval):** The system queries ChromaDB to find the **top 20** text chunks whose embeddings are most semantically similar to the user's question. This is a fast but broad search.
+    * **Stage 2 (Precise Re-ranking):** These 20 candidate chunks are passed to a Cross-Encoder model. This more powerful model directly compares the query against each chunk to calculate a precise relevance score, re-ranking them for accuracy.
+3.  **Contextual Generation:**
+    * The **top 3** most relevant chunks from the re-ranking stage are selected and combined to form the `CONTEXT`.
+    * This context is injected into a prompt template along with the user's original question. The prompt instructs the Llama 3 LLM to answer *only* using the provided information.
+    * The complete prompt is sent to the Llama 3 model via the Groq API, which generates the final, grounded answer.
+4.  **Return Answer:** The response is sent back through the API to the Streamlit UI and displayed to the user.
+
+#### Evaluation Phase
+The `evaluate.py` script is a separate, offline tool to measure how well the RAG system is performing.
+
+1.  **Prepare Data:** It loads a predefined set of questions and corresponding ideal "ground truth" answers from an `eval_dataset.json` file.
+2.  **Generate Answers:** For each question, it runs the entire RAG pipeline (retrieve, re-rank, generate) to get the system's actual answer and the context it used.
+3.  **Evaluate with RAGAs:** It uses the **RAGAs** library to score the system's performance. RAGAs uses another LLM (the "judge") to measure key metrics:
+    * **Faithfulness:** Does the answer stick to the provided context?
+    * **Answer Relevancy:** Is the answer relevant to the user's question?
+    * **Context Precision & Recall:** Was the retrieved context relevant and sufficient to answer the question?
+4.  **Save Results:** The evaluation scores for every question are compiled and saved to a timestamped `.csv` file in the `evaluation_results` folder for analysis.
+
+
+## Technical Stack
+
+- **Backend API:** FastAPI
+- **Frontend UI:** Streamlit
+- **LLM:** `Llama3-8B` (via Groq API, with `tenacity` for rate limit handling)
 - **Vector Database:** ChromaDB
-- **Embedding Model:** `all-MiniLM-L6-v2`
+- **Embedding Model:** `sentence-transformers/all-MiniLM-L6-v2`
 - **Re-ranking Model:** `cross-encoder/ms-marco-MiniLM-L-6-v2`
-- **Evaluation Framework:** Ragas (`faithfulness`, `answer_relevancy`, `context_recall`, `context_precision`) - Uses ChatGroq (Llama3) as the evaluation judge.
-- **Document Processing:** PyMuPDF, python-docx, Pytesseract (for OCR)
+- **Evaluation Framework:** Ragas (using Llama3 as the judge)
+- **Document Processing:** PyMuPDF, `python-docx`, Pytesseract (for OCR)
 
 ## The Evaluation Journey
 
