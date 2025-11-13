@@ -1,0 +1,117 @@
+# docker-compose.dev.yml
+# Development setup - 2 terminals only!
+
+services:
+  # Redis - Automatically starts
+  redis:
+    image: redis:7-alpine
+    container_name: rag-redis-dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
+    restart: unless-stopped
+    networks:
+      - rag-dev-network
+
+  # ChromaDB - Automatically starts  
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: rag-chroma-dev
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma_dev_data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+    restart: unless-stopped
+    networks:
+      - rag-dev-network
+
+  # Celery Worker - Automatically starts with enhanced OCR
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker.dev
+    container_name: rag-worker-dev
+    env_file:
+      - .env
+    environment:
+      - REDIS_HOST=redis
+      - CHROMA_DB_PATH=/app/chroma_db
+      - COLLECTION_NAME=collection
+    volumes:
+      - ./data:/app/data:ro
+      - ./enhanced_document_loader.py:/app/enhanced_document_loader.py
+      - ./enhanced_ingestion_worker.py:/app/enhanced_ingestion_worker.py
+      - ./rag_pipeline.py:/app/rag_pipeline.py
+      - ./sentence_window_retrieval.py:/app/sentence_window_retrieval.py
+      - ./celery_config.py:/app/celery_config.py
+      - chroma_dev_data:/app/chroma_db
+    depends_on:
+      - redis
+    restart: unless-stopped
+    networks:
+      - rag-dev-network
+
+  # Backend API - Terminal 1
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend.dev
+    container_name: rag-backend-dev
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - REDIS_HOST=redis
+      - CHROMA_DB_PATH=/app/chroma_db
+      - COLLECTION_NAME=collection
+    volumes:
+      - ./data:/app/data:ro
+      - ./main.py:/app/main.py
+      - ./rag_pipeline.py:/app/rag_pipeline.py
+      - ./rag_pipeline_advanced.py:/app/rag_pipeline_advanced.py
+      - ./enhanced_document_loader.py:/app/enhanced_document_loader.py
+      - ./sentence_window_retrieval.py:/app/sentence_window_retrieval.py
+      - ./celery_config.py:/app/celery_config.py
+      - chroma_dev_data:/app/chroma_db
+    depends_on:
+      - redis
+      - worker
+      - chroma
+    networks:
+      - rag-dev-network
+    # Auto-restart on file changes
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Frontend UI - Terminal 2
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend.dev
+    container_name: rag-frontend-dev
+    ports:
+      - "8501:8501"
+    environment:
+      - API_BASE_URL=http://backend:8000
+    stdin_open: true
+    tty: true
+    volumes:
+      - ./app.py:/app/app.py
+    depends_on:
+      - backend
+    networks:
+      - rag-dev-network
+    # Auto-restart on file changes
+    command: streamlit run app.py --server.address 0.0.0.0 --server.port 8501
+
+volumes:
+  redis_dev_data:
+  chroma_dev_data:
+
+networks:
+  rag-dev-network:
+    driver: bridge

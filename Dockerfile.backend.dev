@@ -1,0 +1,39 @@
+# Dockerfile.backend.dev
+# Development backend with hot reload
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Download NLTK data
+RUN python -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab')"
+
+# Create directories
+RUN mkdir -p /app/chroma_db /app/.cache
+
+# Copy core files (volumes will override for dev)
+COPY main.py .
+COPY rag_pipeline.py .
+COPY rag_pipeline_advanced.py .
+COPY enhanced_document_loader.py .
+COPY sentence_window_retrieval.py .
+COPY celery_config.py .
+
+# Add healthcheck script
+RUN echo '#!/bin/bash\ncurl -f http://localhost:8000/ || exit 1' > /healthcheck.sh && chmod +x /healthcheck.sh
+
+EXPOSE 8000
+
+# Default command (can be overridden by docker-compose)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

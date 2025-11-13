@@ -1,0 +1,33 @@
+# Dockerfile.worker.dev
+# Development worker with enhanced OCR
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Download NLTK data
+RUN python -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab')"
+
+# Create directories
+RUN mkdir -p /app/chroma_db /app/.cache
+
+# Copy core files (volumes will override for dev)
+COPY enhanced_ingestion_worker.py .
+COPY enhanced_document_loader.py .
+COPY rag_pipeline.py .
+COPY sentence_window_retrieval.py .
+COPY celery_config.py .
+
+# Run enhanced Celery worker
+CMD ["celery", "-A", "enhanced_ingestion_worker", "worker", "-l", "info", "--pool=solo", "--concurrency=1"]
