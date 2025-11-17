@@ -348,7 +348,7 @@ Model configuration is split between the FastAPI API (`src/main.py`) and the RAG
 - Embedding generation: roughly 100 ms per window.
 
 ### Scalability (observed in local testing)
-- Tested with 100+ documents and over 1,000 stored windows.
+- Tested with over 1,000 stored windows.
 - Supports multiple concurrent queries (10+ requests) on a single machine.
 - Ingestion throughput around 10 documents per minute, depending on document size and OCR complexity.
 
