@@ -130,7 +130,7 @@ def process_document(self, file_path: str, window_size: int = 3) -> Dict[str, an
             'windows_added': len(windows),
             'window_size': window_size,
             'total_windows_in_db': self.collection.count(),
-            'technique': 'enhanced-ocr + sentence-window (SOTA)'
+            'technique': 'enhanced-ocr + sentence-window'
         }
 
         logger.info(f"Enhanced ingestion complete: {result}")
@@ -184,7 +184,7 @@ def get_collection_stats() -> Dict[str, any]:
             'status': 'success',
             'collection_name': collection_name,
             'total_windows': count,
-            'technique': 'enhanced-ocr + sentence-window (SOTA)'
+            'technique': 'enhanced-ocr + sentence-window'
         }
     except Exception as e:
         logger.error(f"Error getting collection stats: {str(e)}", exc_info=True)

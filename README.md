@@ -1,6 +1,6 @@
 # RAG Campus Chatbot
 
-A production-ready Retrieval-Augmented Generation (RAG) system for campus information queries, implementing state-of-the-art sentence-window retrieval for improved accuracy and context quality.
+A Retrieval-Augmented Generation (RAG) system for campus information queries, implementing state-of-the-art sentence-window retrieval for improved accuracy and context quality.
 
 ![UI Screenshot](UI.png)
 
@@ -13,7 +13,7 @@ A production-ready Retrieval-Augmented Generation (RAG) system for campus inform
 - **Semantic Caching**: Semantic cache implementation for query result caching with similarity-based retrieval.
 - **Query Optimization**: Query preprocessing and expansion utilities to improve retrieval quality.
 
-### Production Architecture
+### Architecture
 - **Microservices**: Decoupled FastAPI backend, Streamlit frontend, Celery workers, Redis, and ChromaDB services.
 - **Async Processing**: Background document ingestion with Redis-backed Celery task queue.
 - **Optimized Dependencies**: Component-specific requirements files for smaller, faster builds.
@@ -129,7 +129,7 @@ python scripts/trigger_ingestion.py data/
 1. **API Server (`main.py`)**: Stateless FastAPI server handling queries
 2. **Celery Worker (`ingestion_worker.py`)**: Async document processing
 3. **RAG Pipeline (`rag_pipeline.py`)**: Core retrieval and generation logic
-4. **Sentence-Window Retrieval (`sentence_window_retrieval.py`)**: SOTA chunking
+4. **Sentence-Window Retrieval (`sentence_window_retrieval.py`)**: Chunking
 5. **Streamlit UI (`app.py`)**: User interface
 6. **ChromaDB**: Vector database for embeddings
 7. **Redis**: Message broker for Celery tasks
@@ -145,7 +145,7 @@ rag-campus-chatbot/
 ├── src/                          # Core application code
 │   ├── main.py                   # FastAPI server
 │   ├── ingestion_worker.py       # Celery worker for ingestion
-│   ├── rag_pipeline.py           # Core RAG pipeline with SOTA retrieval
+│   ├── rag_pipeline.py           # Core RAG pipeline with retrieval
 │   ├── sentence_window_retrieval.py # Sentence-window chunking
 │   ├── app.py                    # Streamlit UI
 │   ├── celery_config.py          # Celery configuration

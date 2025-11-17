@@ -12,7 +12,7 @@ It ONLY serves queries via the `/ask` endpoint.
 Data ingestion is handled separately by Celery workers (see ingestion_worker.py).
 To ingest documents, use trigger_ingestion.py script.
 
-This separation follows production best practices:
+This separation follows best practices:
 - Read path (query): Handled by this API
 - Write path (ingestion): Handled by async workers
 """

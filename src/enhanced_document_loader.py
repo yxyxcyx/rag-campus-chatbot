@@ -1,7 +1,7 @@
 # enhanced_document_loader.py
 
 """
-Production-Grade Document Loader with Advanced OCR
+Document Loader with Advanced OCR
 
 Handles:
 - Text-based PDFs (PyMuPDF)

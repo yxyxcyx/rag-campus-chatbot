@@ -12,7 +12,7 @@ This module implements an advanced RAG technique where:
 
 This approach provides more precise retrieval while maintaining rich context for the LLM.
 
-Reference: "Sentence-Window Retrieval" - A SOTA RAG technique for improved accuracy
+Reference: "Sentence-Window Retrieval" - A RAG technique for improved accuracy
 """
 
 import re
