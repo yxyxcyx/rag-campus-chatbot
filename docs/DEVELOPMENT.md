@@ -283,7 +283,7 @@ COLLECTION_NAME=collection
 - Cross-encoder reranking
 - Diversity filtering for result quality
 
-**Production-Grade Features:**
+**Features:**
 - Semantic caching for repeated queries
 - Query preprocessing and expansion
 - Comprehensive evaluation metrics (RAGAs)

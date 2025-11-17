@@ -116,7 +116,7 @@ def check_metrics(csv_path: str) -> bool:
         return True
     else:
         print("\nSome metrics failed! Model performance is below threshold.")
-        print("Please improve the model before deploying to production.")
+        print("Please improve the model.")
         return False
 
 

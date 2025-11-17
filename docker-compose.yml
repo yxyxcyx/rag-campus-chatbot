@@ -1,5 +1,5 @@
 # docker-compose.yml
-# Production-ready multi-service RAG system orchestration
+# Multi-service RAG system orchestration
 
 version: '3.8'
 
