@@ -10,3 +10,8 @@ __pycache__/
 .DS_Store
 data/
 evaluation_results/
+dump.rdb
+*.rdb
+.pytest_cache/
+*.log
+.gitignore

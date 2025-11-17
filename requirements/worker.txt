@@ -1,0 +1,40 @@
+# Worker requirements - Celery worker dependencies
+-r base.txt
+
+# Task queue
+celery==5.5.3
+redis==7.0.1
+kombu==5.5.4
+billiard==4.2.2
+vine==5.1.0
+
+# Document processing and OCR
+PyMuPDF==1.26.3
+pytesseract==0.3.13
+python-docx==1.2.0
+pillow==11.3.0
+
+# ML and embeddings
+sentence-transformers==5.1.0
+huggingface-hub==0.34.4
+transformers==4.55.0
+tokenizers==0.21.4
+torch==2.8.0
+numpy==2.3.2
+scikit-learn==1.7.1
+
+# Vector database
+chromadb==1.0.17
+
+# Search and ranking
+rank-bm25==0.2.2
+
+# Text processing
+nltk==3.9.2
+tenacity==9.1.2
+
+# LLM integration
+groq==0.31.0
+langchain==0.3.27
+langchain-core==0.3.74
+langchain-huggingface==0.3.1

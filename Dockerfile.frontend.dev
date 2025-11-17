@@ -6,11 +6,11 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir streamlit requests
+COPY requirements/ ./requirements/
+RUN pip install --no-cache-dir -r requirements/ui.txt
 
 # Copy core files (volumes will override for dev)
-COPY app.py .
+COPY src/app.py .
 
 EXPOSE 8501
 

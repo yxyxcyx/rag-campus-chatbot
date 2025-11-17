@@ -22,6 +22,7 @@ The evaluation process is as follows:
 
 
 import os
+import sys
 import json
 import time
 from datetime import datetime
@@ -35,6 +36,9 @@ from langchain_groq import ChatGroq
 from langchain_huggingface import HuggingFaceEmbeddings
 from sentence_transformers.cross_encoder import CrossEncoder
 import chromadb
+
+# Add src to path for imports
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'src'))
 
 from rag_pipeline import (
     load_documents_from_folder,
@@ -54,10 +58,11 @@ if not groq_api_key:
 print("  - Initializing models...")
 # The "Judge" LLM for Ragas
 judge_llm = ChatGroq(
-    model_name="llama-3.1-8b-instant",  # Updated from decommissioned llama3-8b-8192
+    model_name="llama-3.1-8b-instant",  # Same family as the main RAG pipeline
     groq_api_key=groq_api_key,
     timeout=60.0,
-    max_retries=5
+    max_retries=5,
+    max_tokens=1024
 )
 # Calculate semantic similarity
 ragas_embeddings = HuggingFaceEmbeddings(model_name='all-MiniLM-L6-v2')
@@ -66,22 +71,30 @@ print("  - Loading Cross-Encoder re-ranking model...")
 cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
 
 print("  - Connecting to vector database...")
-client = chromadb.PersistentClient(path="./chroma_db")
-collection = client.get_or_create_collection(name="xmum_handbook")
+chroma_db_path = os.getenv("CHROMA_DB_PATH", "./chroma_db")
+collection_name = os.getenv("COLLECTION_NAME", "collection")
+client = chromadb.PersistentClient(path=chroma_db_path)
+collection = client.get_or_create_collection(name=collection_name)
 
-if collection.count() == 0:
+current_count = collection.count()
+if current_count == 0:
     print("  - Database is empty. Running one-time data ingestion pipeline...")
     documents_dict = load_documents_from_folder("data")
     if documents_dict:
-        text_chunks_with_metadata = chunk_text(documents_dict)
-        vector_embeddings = embed_chunks(text_chunks_with_metadata, ragas_embeddings)
-        ids = [f"chunk_{i}" for i in range(len(text_chunks_with_metadata))]
-        collection.add(embeddings=vector_embeddings, documents=text_chunks_with_metadata, ids=ids)
+        # Sentence-window chunking returns (central_sentences, windows)
+        central_sentences, windows = chunk_text(documents_dict)
+
+        print(f"  - Created {len(windows)} sentence windows for evaluation store.")
+        vector_embeddings = embed_chunks(central_sentences, ragas_embeddings)
+        ids = [f"sw_eval_{i}" for i in range(len(windows))]
+
+        collection.add(embeddings=vector_embeddings, documents=windows, ids=ids)
         print("  - PIPELINE COMPLETE. Database is now populated.")
+        print(f"  - Total chunks/windows in collection '{collection_name}': {collection.count()}.")
     else:
         raise ValueError("No text could be extracted from the 'data' folder.")
 else:
-    print(f"  - Database already populated with {collection.count()} chunks.")
+    print(f"  - Database already populated with {current_count} chunks/windows in collection '{collection_name}'.")
 
 # SECTION 2: DATA PREPARATION
 print("Preparing evaluation data...")
@@ -122,6 +135,46 @@ print("Running RAGAS evaluation...")
 metrics = [faithfulness, answer_relevancy, context_recall, context_precision]
 all_results_data = []
 
+
+def _extract_score(metric_value):
+    """Extract a plain float score from a RAGAS metric value.
+
+    Handles values that may be lists/arrays of length 1, numpy scalars,
+    or objects with a `.score` attribute. Returns NaN if a numeric
+    value cannot be obtained.
+    """
+
+    import math
+
+    try:
+        value = metric_value
+
+        # If it's a list/tuple/array, use the first element
+        if isinstance(value, (list, tuple)):
+            if not value:
+                return float("nan")
+            value = value[0]
+        else:
+            # Some RAGAS types may be indexable like arrays
+            try:
+                value = value[0]
+            except Exception:
+                pass
+
+        # If it has a `.score` attribute, use that
+        if hasattr(value, "score"):
+            value = value.score
+
+        # If it's a dict with 'score', use that
+        if isinstance(value, dict) and "score" in value:
+            value = value["score"]
+
+        # Convert numpy or Python numeric types to float
+        return float(value)
+
+    except Exception:
+        return float("nan")
+
 # Evaluate one question at a time (avoid rate limits and handle errors)
 for i, row in enumerate(response_dataset):
     print(f"  - Evaluating question {i+1}/{len(response_dataset)}: '{row['question'][:50]}...'")
@@ -137,14 +190,14 @@ for i, row in enumerate(response_dataset):
             embeddings=ragas_embeddings,
             raise_exceptions=True
         )
-        
-        # Store the scores
+
+        # Store the scores as plain floats
         result_data = {
             'question': row['question'],
-            'faithfulness': result['faithfulness'],
-            'answer_relevancy': result['answer_relevancy'],
-            'context_recall': result['context_recall'],
-            'context_precision': result['context_precision']
+            'faithfulness': _extract_score(result['faithfulness']),
+            'answer_relevancy': _extract_score(result['answer_relevancy']),
+            'context_recall': _extract_score(result['context_recall']),
+            'context_precision': _extract_score(result['context_precision'])
         }
         all_results_data.append(result_data)
         print("    - Success.")

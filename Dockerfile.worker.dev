@@ -13,8 +13,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements/ ./requirements/
+RUN pip install --no-cache-dir -r requirements/worker.txt
 
 # Download NLTK data
 RUN python -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab')"
@@ -23,11 +23,7 @@ RUN python -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab')"
 RUN mkdir -p /app/chroma_db /app/.cache
 
 # Copy core files (volumes will override for dev)
-COPY enhanced_ingestion_worker.py .
-COPY enhanced_document_loader.py .
-COPY rag_pipeline.py .
-COPY sentence_window_retrieval.py .
-COPY celery_config.py .
+COPY src/ ./
 
-# Run enhanced Celery worker
-CMD ["celery", "-A", "enhanced_ingestion_worker", "worker", "-l", "info", "--pool=solo", "--concurrency=1"]
+# Run Celery worker
+CMD ["celery", "-A", "ingestion_worker", "worker", "-l", "info", "--pool=solo", "--concurrency=1"]

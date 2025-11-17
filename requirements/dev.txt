@@ -1,0 +1,16 @@
+# Development requirements - For evaluation and development
+-r worker.txt
+
+# Evaluation framework
+ragas==0.3.1
+datasets==4.0.0
+pandas==2.3.1
+
+# Development tools
+flake8==7.3.0
+pytest==9.0.0
+
+# Additional ML dependencies for evaluation
+openai==1.99.9
+langchain-openai==0.3.30
+langchain-groq==0.3.7

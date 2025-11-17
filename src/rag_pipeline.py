@@ -1,10 +1,8 @@
-# rag_pipeline_advanced.py
+# rag_pipeline.py
 
 """
-Production-Grade RAG Pipeline - Principal Engineer Level
-
-Advanced Features:
-1. Enhanced OCR for image-based PDFs
+Features:
+1. OCR for image-based PDFs
 2. Hybrid Search (BM25 + Vector + Reranking)
 3. Query Preprocessing & Expansion
 4. Semantic Caching
@@ -12,8 +10,8 @@ Advanced Features:
 6. Comprehensive Evaluation Metrics
 
 Architecture:
-- Document Loading: Enhanced OCR with preprocessing
-- Chunking: Sentence-window retrieval (SOTA)
+- Document Loading: OCR with preprocessing
+- Chunking: Sentence-window retrieval
 - Retrieval: Hybrid BM25 + Vector search
 - Reranking: Cross-encoder + diversity filter
 - Generation: Groq LLM with optimized prompts
@@ -35,9 +33,18 @@ import numpy as np
 from tenacity import retry, stop_after_attempt, retry_if_exception_type
 from requests.exceptions import Timeout
 
-# Import enhanced loader
-from enhanced_document_loader import EnhancedDocumentLoader
-from sentence_window_retrieval import chunk_text_with_sentence_windows
+# Import enhanced loader (conditional for container compatibility)
+try:
+    from enhanced_document_loader import EnhancedDocumentLoader
+    ENHANCED_LOADER_AVAILABLE = True
+except ImportError:
+    ENHANCED_LOADER_AVAILABLE = False
+
+try:
+    from sentence_window_retrieval import chunk_text_with_sentence_windows
+    SENTENCE_WINDOW_AVAILABLE = True
+except ImportError:
+    SENTENCE_WINDOW_AVAILABLE = False
 
 
 load_dotenv()
@@ -49,8 +56,11 @@ load_dotenv()
 
 def load_documents_from_folder(folder_path: str) -> Dict[str, str]:
     """
-    Load documents with enhanced OCR support
+    Load documents with enhanced OCR support (worker containers only)
     """
+    if not ENHANCED_LOADER_AVAILABLE:
+        raise ImportError("Enhanced document loading not available in this container. Use worker container for ingestion.")
+    
     loader = EnhancedDocumentLoader(dpi=2.0, parallel_workers=4)
     return loader.load_folder(folder_path)
 
@@ -61,11 +71,14 @@ def load_documents_from_folder(folder_path: str) -> Dict[str, str]:
 
 def chunk_text(documents_dict: Dict[str, str], window_size: int = 3) -> Tuple[List[str], List[str]]:
     """
-    Sentence-window chunking for precise retrieval
+    Sentence-window chunking for precise retrieval (worker containers only)
     
     Returns:
         (central_sentences, windows)
     """
+    if not SENTENCE_WINDOW_AVAILABLE:
+        raise ImportError("Sentence-window retrieval not available in this container. Use worker container for ingestion.")
+    
     return chunk_text_with_sentence_windows(documents_dict, window_size=window_size)
 
 
@@ -148,7 +161,7 @@ class HybridRetriever:
         tokenized_docs = [doc.lower().split() for doc in documents]
         self.bm25 = BM25Okapi(tokenized_docs)
         
-        print(f"📊 Hybrid Retriever initialized with {len(documents)} documents")
+        print(f" Hybrid Retriever initialized with {len(documents)} documents")
     
     def retrieve_bm25(self, query: str, top_k: int = 10) -> List[Tuple[int, float]]:
         """
@@ -297,6 +310,43 @@ def diversity_filter(documents: List[str], threshold: float = 0.8) -> List[str]:
     return filtered
 
 
+# Backwards-compatible retrieval helper
+def retrieve_and_rerank(
+    query: str,
+    embedding_model: HuggingFaceEmbeddings,
+    collection: chromadb.Collection,
+    cross_encoder: CrossEncoder,
+    n_initial: int = 20,
+    n_final: int = 3,
+) -> List[str]:
+    """Two-stage retrieval used by the FastAPI API and evaluation scripts.
+
+    This mirrors the behavior of the previous rag_pipeline implementation:
+    1. Vector search in ChromaDB using the query embedding
+    2. Cross-encoder reranking of the retrieved windows
+    """
+    # Stage 1: initial vector retrieval from ChromaDB
+    query_embedding = embedding_model.embed_query(query)
+    initial_results = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=n_initial,
+    )
+
+    documents = initial_results.get("documents", [[]])
+    if not documents or not documents[0]:
+        return []
+
+    retrieved_windows = documents[0]
+
+    # Stage 2: precise reranking with cross-encoder
+    pairs = [[query, window] for window in retrieved_windows]
+    scores = cross_encoder.predict(pairs)
+
+    scored_windows = sorted(zip(scores, retrieved_windows), reverse=True)
+    top_windows = [window for score, window in scored_windows[:n_final]]
+    return top_windows
+
+
 # ============================================================================
 # SECTION 6: SEMANTIC CACHING
 # ============================================================================
@@ -372,7 +422,7 @@ class SemanticCache:
             similarity = self._compute_similarity(query_embedding, cache_entry['embedding'])
             
             if similarity >= self.similarity_threshold:
-                print(f"💾 Cache hit! Similarity: {similarity:.3f}")
+                print(f" Cache hit! Similarity: {similarity:.3f}")
                 return cache_entry['response']
         
         return None
@@ -441,7 +491,7 @@ Answer:"""
         ],
         model="llama-3.1-8b-instant",
         temperature=0.1,  # Lower for more factual responses
-        max_tokens=500,
+        max_tokens=1024,
     )
     return chat_completion.choices[0].message.content
 

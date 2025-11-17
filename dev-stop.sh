@@ -6,10 +6,10 @@ echo "======================================="
 
 docker compose -f docker-compose.dev.yml down
 
-echo "✅ All services stopped"
+echo " All services stopped"
 echo ""
-echo "📊 To see container status:"
+echo " To see container status:"
 echo "   docker ps -a"
 echo ""
-echo "🗑️  To clean up volumes (⚠️  deletes data):"
+echo "🗑️  To clean up volumes (  deletes data):"
 echo "   docker compose -f docker-compose.dev.yml down -v"

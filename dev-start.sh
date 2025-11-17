@@ -1,20 +1,20 @@
 #!/bin/bash
 # dev-start.sh - One command to rule them all!
 
-echo "🚀 Starting RAG Development Environment"
+echo " Starting RAG Development Environment"
 echo "======================================"
 
 # Check if Docker is running
 if ! docker info > /dev/null 2>&1; then
-    echo "❌ Docker is not running. Please start Docker Desktop first."
+    echo " Docker is not running. Please start Docker Desktop first."
     exit 1
 fi
 
 # Check if .env exists
 if [ ! -f .env ]; then
-    echo "⚠️  .env file not found. Creating from template..."
+    echo "  .env file not found. Creating from template..."
     cp .env.example .env
-    echo "📝 Please edit .env and add your GROQ_API_KEY"
+    echo " Please edit .env and add your GROQ_API_KEY"
     echo "   Then run this script again."
     exit 1
 fi
@@ -23,14 +23,14 @@ fi
 echo "🔨 Building containers..."
 docker compose -f docker-compose.dev.yml build
 
-echo "🚀 Starting all services..."
+echo " Starting all services..."
 docker compose -f docker-compose.dev.yml up -d redis chroma worker
 
 echo "⏳ Waiting for services to be ready..."
 sleep 10
 
 # Check if data needs ingestion
-echo "🔍 Checking database status..."
+echo " Checking database status..."
 CHUNK_COUNT=$(docker compose -f docker-compose.dev.yml exec -T backend python -c "
 import chromadb
 try:
@@ -41,20 +41,29 @@ except:
     print('0')
 " 2>/dev/null || echo "0")
 
-echo "📊 Current chunks in database: $CHUNK_COUNT"
+echo " Current chunks in database: $CHUNK_COUNT"
 
 if [ "$CHUNK_COUNT" -lt "100" ]; then
     echo "📥 Database appears empty. Triggering enhanced ingestion..."
     docker compose -f docker-compose.dev.yml exec worker python -c "
-from enhanced_ingestion_worker import process_document
+from ingestion_worker import process_document
+from celery.exceptions import TimeoutError
+
 task = process_document.delay('/app/data')
-result = task.get(timeout=300)
-print('✅ Ingestion result:', result)
+print('📨 Ingestion task dispatched:', task.id)
+
+try:
+    # Allow a generous timeout for large PDFs / first-run model downloads
+    result = task.get(timeout=900)
+    print(' Ingestion result:', result)
+except TimeoutError:
+    # Non-fatal: task keeps running in the background
+    print('⏱️ Ingestion is still running in background (timeout waiting for result). Task ID:', task.id)
     "
 fi
 
 echo ""
-echo "✅ Development environment ready!"
+echo " Development environment ready!"
 echo "================================="
 echo ""
 echo "🖥️  TERMINAL 1 - Backend:"

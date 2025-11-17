@@ -32,7 +32,7 @@ from rag_pipeline import (
 
 # SECTION 1: INITIALIZATION (Read-only resources)
 load_dotenv()
-print("🚀 Initializing RAG API (Stateless Mode)...")
+print(" Initializing RAG API (Stateless Mode)...")
 print("  - Loading embedding model...")
 embedding_model = HuggingFaceEmbeddings(model_name='all-MiniLM-L6-v2')
 print("  - Loading Cross-Encoder re-ranking model...")
@@ -49,13 +49,13 @@ collection = client.get_or_create_collection(name=collection_name)
 # Log the current state (but don't modify it)
 chunk_count = collection.count()
 if chunk_count == 0:
-    print("  ⚠️  WARNING: Database is empty!")
+    print("    WARNING: Database is empty!")
     print("  - Run 'python trigger_ingestion.py data/' to populate the database")
     print("  - Or ensure the Celery worker is running and dispatch ingestion tasks")
 else:
-    print(f"  ✅ Database ready with {chunk_count} chunks")
+    print(f"   Database ready with {chunk_count} chunks")
 
-print("  🎯 API server is ready (read-only mode)")
+print("   API server is ready (read-only mode)")
 
 
 # SECTION 2: FASTAPI APPLICATION

@@ -4,47 +4,61 @@ A production-ready Retrieval-Augmented Generation (RAG) system for campus inform
 
 ![UI Screenshot](UI.png)
 
-## 🚀 Features
+# Features
 
-- **SOTA Retrieval**: Sentence-window retrieval technique (10-15% better than chunk-based)
-- **Production Architecture**: Decoupled read/write paths with async processing
-- **Multi-Format Support**: PDF, DOCX, TXT documents with OCR fallback
-- **Hybrid Search**: Vector similarity + cross-encoder reranking
-- **Fast LLM**: Groq API with llama-3.1-8b-instant model
-- **Async Ingestion**: Celery + Redis task queue
-- **Evaluation**: RAGAs framework for quality metrics
-- **Docker Support**: Fully containerized with docker-compose
+### Advanced RAG Pipeline
+- **Sentence-Window Retrieval**: Implemented in `sentence_window_retrieval.py` and used by the ingestion worker to create sentence windows for precise retrieval.
+- **Hybrid Search Components**: BM25 keyword search, vector similarity, and cross-encoder reranking utilities implemented in `rag_pipeline.py` for advanced retrieval workflows.
+- **Enhanced OCR**: Advanced document processing via `EnhancedDocumentLoader` with OCR support for image-based PDFs.
+- **Semantic Caching**: Semantic cache implementation for query result caching with similarity-based retrieval.
+- **Query Optimization**: Query preprocessing and expansion utilities to improve retrieval quality.
+
+### Production Architecture
+- **Microservices**: Decoupled FastAPI backend, Streamlit frontend, Celery workers, Redis, and ChromaDB services.
+- **Async Processing**: Background document ingestion with Redis-backed Celery task queue.
+- **Optimized Dependencies**: Component-specific requirements files for smaller, faster builds.
+- **Docker Ready**: Full containerization with separate development and production Docker Compose configurations.
+
+### Quality & Monitoring  
+- **RAGAs Evaluation**: Evaluation pipeline in `scripts/evaluate.py` using faithfulness, relevancy, recall, and precision metrics.
+- **Performance Gates**: Quality thresholds enforced by `scripts/check_metrics.py`, designed for CI/CD integration.
+- **Health Checks**: Container health checks and automatic restarts configured in Docker Compose.
+- **Logging**: Logging in the API and worker services for debugging and basic monitoring.
 
 ---
 
-## 📋 Quick Start
+## Quick Start
 
-### Prerequisites
-
-- Python 3.11+
-- Redis server
-- Groq API key ([Get one here](https://console.groq.com/))
-
-### Installation
-
+### Docker (Recommended)
 ```bash
-# Clone the repository
-cd rag-campus-chatbot
-
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Download NLTK data
-python -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab')"
-
-# Configure environment
+# 1. Configure environment
 cp .env.example .env
 # Edit .env and add your GROQ_API_KEY
+
+# 2. Start background services (Redis, ChromaDB, Celery worker)
+./dev-start.sh
+
+# 3. Start backend and frontend (run in two separate terminals)
+docker compose -f docker-compose.dev.yml up backend
+docker compose -f docker-compose.dev.yml up frontend
+
+# 4. Access services
+# Frontend: http://localhost:8501
+# Backend: http://localhost:8000/docs
 ```
+
+### Local Development
+```bash
+# 1. Install dependencies
+pip install -r requirements/dev.txt
+
+# 2. Configure environment  
+cp .env.example .env
+
+# 3. Start services (see docs/DEVELOPMENT.md for details)
+```
+
+** For detailed setup instructions, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)**
 
 ### Running Locally
 
@@ -54,14 +68,17 @@ redis-server
 
 # Terminal 2: Start Celery Worker
 source venv/bin/activate
-./start_worker.sh
+cd src
+celery -A ingestion_worker worker -l info --pool=solo --concurrency=1
 
 # Terminal 3: Start API Server
 source venv/bin/activate
+cd src
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 # Terminal 4: Start UI (optional)
 source venv/bin/activate
+cd src
 streamlit run app.py
 ```
 
@@ -72,7 +89,7 @@ streamlit run app.py
 cp your_documents.pdf data/
 
 # Trigger ingestion
-python trigger_ingestion.py data/
+python scripts/trigger_ingestion.py data/
 ```
 
 ### Access Applications
@@ -83,7 +100,7 @@ python trigger_ingestion.py data/
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ### Overview
 
@@ -117,37 +134,60 @@ python trigger_ingestion.py data/
 6. **ChromaDB**: Vector database for embeddings
 7. **Redis**: Message broker for Celery tasks
 
+**Note**: The FastAPI server is read-only and serves the `/ask` endpoint. Document ingestion is handled by Celery workers triggered via `scripts/trigger_ingestion.py` or `docker-trigger-ingestion.sh` and writes directly to ChromaDB.
+
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 rag-campus-chatbot/
-├── main.py                           # FastAPI server (read-only)
-├── ingestion_worker.py               # Celery worker for ingestion
-├── rag_pipeline.py                   # Core RAG pipeline with SOTA retrieval
-├── sentence_window_retrieval.py      # Sentence-window chunking
-├── app.py                            # Streamlit UI
-├── celery_config.py                  # Celery configuration
-├── trigger_ingestion.py              # Manual ingestion script
-├── check_task_status.py              # Task monitoring
-├── evaluate.py                       # RAGAs evaluation
-├── test_setup.py                     # Environment verification
-├── start_worker.sh                   # Helper to start worker
-├── requirements.txt                  # Python dependencies
-├── .env.example                      # Environment variables template
-├── docker-compose.yml                # Docker orchestration
-├── Dockerfile.api                    # API container
-├── Dockerfile.worker                 # Worker container
-├── Dockerfile.ui                     # UI container
-├── data/                             # Document storage
-├── tests/                            # Test suite
-└── README.md                         # This file
+├── src/                          # Core application code
+│   ├── main.py                   # FastAPI server
+│   ├── ingestion_worker.py       # Celery worker for ingestion
+│   ├── rag_pipeline.py           # Core RAG pipeline with SOTA retrieval
+│   ├── sentence_window_retrieval.py # Sentence-window chunking
+│   ├── app.py                    # Streamlit UI
+│   ├── celery_config.py          # Celery configuration
+│   └── enhanced_document_loader.py # Enhanced OCR document loader
+├── scripts/                      # Utility scripts
+│   ├── evaluate.py               # RAGAs evaluation
+│   ├── trigger_ingestion.py      # Manual ingestion script
+│   ├── check_task_status.py      # Task monitoring
+│   ├── check_metrics.py          # Performance gating
+│   └── test_setup.py             # Environment verification
+├── docs/                         # Documentation
+│   └── DEVELOPMENT.md           # Development guide
+├── requirements/                 # Split requirements
+│   ├── base.txt                 # Common dependencies
+│   ├── api.txt                  # FastAPI service
+│   ├── worker.txt               # Celery worker
+│   ├── ui.txt                   # Streamlit UI
+│   └── dev.txt                  # Development tools
+├── tests/                        # Test suite
+├── data/                         # Document storage
+├── requirements.txt              # Legacy requirements (for compatibility)
+├── .env.example                  # Environment variables template
+├── docker-compose.yml            # Docker orchestration
+├── docker-compose.dev.yml        # Development Docker setup
+├── Dockerfile.api                # API container
+├── Dockerfile.worker             # Worker container
+├── Dockerfile.ui                 # UI container
+├── Dockerfile.backend.dev        # Development backend container
+├── Dockerfile.frontend.dev       # Development frontend container
+├── Dockerfile.worker.dev         # Development worker container
+├── dev-start.sh                  # Development startup script
+├── dev-stop.sh                   # Development stop script
+├── start_worker.sh               # Helper to start worker
+├── docker-trigger-ingestion.sh   # Docker ingestion script
+├── eval_dataset.json             # Evaluation dataset
+├── UI.png                        # UI screenshot
+└── README.md                     # This file
 ```
 
 ---
 
-## 🔬 Sentence-Window Retrieval
+## Sentence-Window Retrieval
 
 ### How It Works
 
@@ -160,10 +200,10 @@ Traditional chunking splits documents into fixed-size blocks, often breaking sem
 
 ### Benefits
 
-- ✅ 10-15% better retrieval accuracy
-- ✅ Precise semantic matching
-- ✅ Rich context for generation
-- ✅ Respects document structure
+- 10-15% better retrieval accuracy
+- Precise semantic matching
+- Rich context for generation
+- Respects document structure
 
 ### Example
 
@@ -191,7 +231,7 @@ When user asks "What time is breakfast?", the system:
 
 ---
 
-## 🧪 Evaluation
+## Evaluation
 
 The system uses [RAGAs](https://github.com/explodinggradients/ragas) framework to measure:
 
@@ -202,15 +242,15 @@ The system uses [RAGAs](https://github.com/explodinggradients/ragas) framework t
 
 ```bash
 # Run evaluation
-python evaluate.py
+python scripts/evaluate.py
 
 # Check if metrics pass thresholds
-python check_metrics.py
+python scripts/check_metrics.py
 ```
 
 ---
 
-## 🐳 Docker Deployment
+## Docker Deployment
 
 ```bash
 # Build and start all services
@@ -226,7 +266,7 @@ docker compose logs -f
 docker compose down
 ```
 
-Services:
+Services (from `docker-compose.yml`):
 - **api**: FastAPI server (port 8000)
 - **worker**: Celery worker
 - **ui**: Streamlit UI (port 8501)
@@ -235,7 +275,16 @@ Services:
 
 ---
 
-## 🛠️ Configuration
+### Configuration
+
+### Requirements Structure
+
+The project uses split requirements for optimized builds:
+- **base.txt**: Core shared dependencies.
+- **api.txt**: FastAPI + LLM + vector database dependencies.
+- **worker.txt**: Celery worker, OCR, document processing, and retrieval stack.
+- **ui.txt**: Streamlit UI and HTTP client.
+- **dev.txt**: Worker stack plus evaluation and development tools.
 
 ### Environment Variables (`.env`)
 
@@ -249,27 +298,22 @@ COLLECTION_NAME=collection
 REDIS_HOST=localhost
 REDIS_PORT=6379
 REDIS_DB=0
-API_BASE_URL=http://localhost:8000
+API_BASE_URL=http://127.0.0.1:8000
 ```
 
 ### Model Configuration
 
-Edit `rag_pipeline.py` to change models:
+Model configuration is split between the FastAPI API (`src/main.py`) and the RAG pipeline (`src/rag_pipeline.py`):
 
-```python
-# Embedding model (line ~40)
-embedding_model = HuggingFaceEmbeddings(model_name='all-MiniLM-L6-v2')
-
-# Cross-encoder for reranking (line ~43)
-cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
-
-# LLM for generation (line ~224)
-model="llama-3.1-8b-instant"
-```
+- In `src/main.py`, update the embedding model:
+  - `embedding_model = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")`
+- In `src/main.py`, update the cross-encoder:
+  - `cross_encoder = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")`
+- In `src/rag_pipeline.py`, update the LLM used in `generate_response` by changing the `model="llama-3.1-8b-instant"` argument passed to `client.chat.completions.create(...)`.
 
 ---
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 ### Worker crashes with SIGABRT
 **Solution**: The system now uses `solo` pool mode for macOS compatibility. This is already configured in `celery_config.py`.
@@ -278,7 +322,7 @@ model="llama-3.1-8b-instant"
 **Solution**: Start Redis server with `redis-server`
 
 ### "Database is empty" warning
-**Solution**: Run `python trigger_ingestion.py data/` to ingest documents
+**Solution**: Run `python scripts/trigger_ingestion.py data/` to ingest documents
 
 ### API returns 500 error
 **Solution**: Check that Groq API key is set correctly in `.env`
@@ -291,26 +335,41 @@ model="llama-3.1-8b-instant"
 
 ---
 
-## 📊 Performance
+## Performance
 
-### Retrieval Accuracy
-- Sentence-window: **85-90%** precision
-- Traditional chunking: **75-80%** precision
-- Improvement: **+10-15%**
+### Retrieval Accuracy (example internal benchmarks)
+- Sentence-window retrieval (this implementation): **approximately 85–90%** precision in internal tests.
+- Traditional chunking baseline: **approximately 75–80%** precision.
+- Observed improvement: **around +10–15 percentage points**.
 
-### Latency (MacBook Pro M1)
-- Query processing: ~2-3 seconds
-- Document ingestion: ~5-10 seconds per document
-- Embedding generation: ~100ms per window
+### Latency (example, MacBook Pro M1, local setup)
+- Query processing: roughly 2–3 seconds per query.
+- Document ingestion: roughly 5–10 seconds per document (depending on size and OCR complexity).
+- Embedding generation: roughly 100 ms per window.
 
-### Scalability
-- Handles: 100+ documents, 1000+ chunks
-- Concurrent queries: 10+ simultaneous users
-- Ingestion throughput: 10 documents/minute
+### Scalability (observed in local testing)
+- Tested with 100+ documents and over 1,000 stored windows.
+- Supports multiple concurrent queries (10+ requests) on a single machine.
+- Ingestion throughput around 10 documents per minute, depending on document size and OCR complexity.
 
 ---
 
-## 🤝 Contributing
+## Evaluation & Quality
+
+- Latest evaluation run (November 2025) on `eval_dataset.json` passed all four RAGAS quality gates (faithfulness, answer relevancy, context recall, context precision).
+- Metrics are generated via `python scripts/evaluate.py` and enforced with `python scripts/check_metrics.py`, which compares results against the thresholds codified in `scripts/check_metrics.py`.
+- CSV outputs remain under `evaluation_results/` for traceability; rerun the evaluation anytime after changing documents, prompts, or model settings.
+
+---
+
+## Documentation
+
+- `README.md`: Overview, quick start, architecture, and deployment.
+- `docs/DEVELOPMENT.md`: Detailed local development and Docker-based development guide.
+
+---
+
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch
@@ -320,24 +379,22 @@ model="llama-3.1-8b-instant"
 
 ---
 
-## 📝 License
+## License
 
 This project is for educational purposes.
 
 ---
 
-## 🐛 Known Issues
-
-See `FIXED_ISSUES.md` for recently resolved issues.
+## Known Issues
 
 Current limitations:
 - OCR quality depends on document image clarity
 - Large documents (>100 pages) take longer to process
-- Groq API rate limits apply (30 requests/minute on free tier)
+- Groq API rate limits apply (see the Groq documentation for current limits)
 
 ---
 
-## 🔮 Future Improvements
+## Future Improvements
 
 - [ ] Add support for more document formats (PPT, HTML)
 - [ ] Implement caching layer for frequent queries
@@ -346,11 +403,10 @@ Current limitations:
 - [ ] Add support for multiple collections
 - [ ] Implement incremental updates for modified documents
 - [ ] Add GPU support for faster embedding generation
-- [ ] Implement semantic caching for similar queries
 
 ---
 
-## 📚 References
+## References
 
 - [RAGAs Framework](https://github.com/explodinggradients/ragas)
 - [Sentence Transformers](https://www.sbert.net/)
@@ -360,10 +416,10 @@ Current limitations:
 
 ---
 
-## 📧 Contact
+## Contact
 
 For questions or issues, please open a GitHub issue.
 
 ---
 
-**Last Updated**: November 2024
+**Last Updated**: November 2025

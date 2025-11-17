@@ -1,0 +1,8 @@
+# UI requirements - Streamlit frontend dependencies
+-r base.txt
+
+# Streamlit web framework
+streamlit==1.48.1
+
+# Web requests
+requests==2.32.4

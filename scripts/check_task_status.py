@@ -11,7 +11,12 @@ Usage:
 """
 
 import sys
+import os
 from celery.result import AsyncResult
+
+# Add src to path for imports
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'src'))
+
 from celery_config import celery_app
 
 

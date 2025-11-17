@@ -43,11 +43,7 @@ services:
       - COLLECTION_NAME=collection
     volumes:
       - ./data:/app/data:ro
-      - ./enhanced_document_loader.py:/app/enhanced_document_loader.py
-      - ./enhanced_ingestion_worker.py:/app/enhanced_ingestion_worker.py
-      - ./rag_pipeline.py:/app/rag_pipeline.py
-      - ./sentence_window_retrieval.py:/app/sentence_window_retrieval.py
-      - ./celery_config.py:/app/celery_config.py
+      - ./src:/app
       - chroma_dev_data:/app/chroma_db
     depends_on:
       - redis
@@ -71,12 +67,7 @@ services:
       - COLLECTION_NAME=collection
     volumes:
       - ./data:/app/data:ro
-      - ./main.py:/app/main.py
-      - ./rag_pipeline.py:/app/rag_pipeline.py
-      - ./rag_pipeline_advanced.py:/app/rag_pipeline_advanced.py
-      - ./enhanced_document_loader.py:/app/enhanced_document_loader.py
-      - ./sentence_window_retrieval.py:/app/sentence_window_retrieval.py
-      - ./celery_config.py:/app/celery_config.py
+      - ./src:/app
       - chroma_dev_data:/app/chroma_db
     depends_on:
       - redis
@@ -100,7 +91,7 @@ services:
     stdin_open: true
     tty: true
     volumes:
-      - ./app.py:/app/app.py
+      - ./src/app.py:/app/app.py
     depends_on:
       - backend
     networks:

@@ -194,7 +194,7 @@ def chunk_text_with_sentence_windows(
         for window, meta in zip(windows, metadata_list)
     ]
     
-    print(f"📊 Created {len(central_sentences)} sentence windows")
+    print(f" Created {len(central_sentences)} sentence windows")
     print(f"   - Window size: ±{window_size} sentences")
     print(f"   - Total sentences to embed: {len(central_sentences)}")
     

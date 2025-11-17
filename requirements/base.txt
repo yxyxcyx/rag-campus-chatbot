@@ -1,0 +1,7 @@
+# Base requirements - Common dependencies across all services
+python-dotenv==1.1.1
+requests==2.32.4
+pydantic==2.11.7
+pydantic-settings==2.10.1
+typing_extensions==4.14.1
+packaging==25.0

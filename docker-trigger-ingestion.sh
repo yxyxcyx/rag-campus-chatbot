@@ -10,7 +10,7 @@ if [ -z "$1" ]; then
     exit 1
 fi
 
-echo "🚀 Triggering ingestion for: $1"
+echo " Triggering ingestion for: $1"
 echo "📋 Running in Docker worker container..."
 
 docker compose exec worker python -c "
@@ -24,7 +24,7 @@ print('Waiting for task to complete...')
 try:
     result = task.get(timeout=3600)
     print('\n' + '='*60)
-    print('✅ INGESTION COMPLETE')
+    print(' INGESTION COMPLETE')
     print('='*60)
     print(f'Status: {result.get(\"status\")}')
     print(f'Message: {result.get(\"message\")}')
@@ -33,6 +33,6 @@ try:
     print(f'Total chunks in DB: {result.get(\"total_chunks_in_db\", \"N/A\")}')
     print('='*60)
 except Exception as e:
-    print(f'\n❌ Error: {e}')
+    print(f'\n Error: {e}')
     sys.exit(1)
 "

@@ -136,7 +136,7 @@ class EnhancedDocumentLoader:
         if ocr_needed:
             print(f"   📸 OCR Mode: {len(doc) - text_pages}/{len(doc)} pages need OCR")
         else:
-            print(f"   📝 Text Mode: {text_pages}/{len(doc)} pages have text")
+            print(f"    Text Mode: {text_pages}/{len(doc)} pages have text")
         
         # Extract pages
         if self.parallel_workers > 1 and len(doc) > 5:
@@ -175,8 +175,8 @@ class EnhancedDocumentLoader:
         total_text = sum(len(text) for text in results.values())
         non_empty = sum(1 for text in results.values() if len(text.strip()) > 50)
         
-        print(f"   ✅ Extracted {non_empty}/{len(results)} pages successfully")
-        print(f"   📊 Total text: {total_text:,} characters")
+        print(f"    Extracted {non_empty}/{len(results)} pages successfully")
+        print(f"    Total text: {total_text:,} characters")
         
         return {filename: "\n\n".join(results.values())}
     
@@ -188,7 +188,7 @@ class EnhancedDocumentLoader:
         doc = docx.Document(filepath)
         text = "\n\n".join([para.text for para in doc.paragraphs if para.text.strip()])
         
-        print(f"   ✅ Extracted {len(text):,} characters")
+        print(f"    Extracted {len(text):,} characters")
         
         return {filename: text}
     
@@ -200,7 +200,7 @@ class EnhancedDocumentLoader:
         with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
             text = f.read()
         
-        print(f"   ✅ Extracted {len(text):,} characters")
+        print(f"    Extracted {len(text):,} characters")
         
         return {filename: text}
     
@@ -218,11 +218,11 @@ class EnhancedDocumentLoader:
                 lang='eng'
             )
             
-            print(f"   ✅ Extracted {len(text):,} characters")
+            print(f"    Extracted {len(text):,} characters")
             
             return {filename: text}
         except Exception as e:
-            print(f"   ❌ Error: {e}")
+            print(f"    Error: {e}")
             return {filename: ""}
     
     def load_document(self, filepath: str) -> Dict[str, str]:
@@ -242,7 +242,7 @@ class EnhancedDocumentLoader:
         elif ext in ['.png', '.jpg', '.jpeg', '.tiff', '.bmp']:
             return self.load_image(filepath)
         else:
-            print(f"⚠️  Unsupported format: {ext}")
+            print(f"  Unsupported format: {ext}")
             return {}
     
     def load_folder(self, folder_path: str) -> Dict[str, str]:
@@ -269,8 +269,8 @@ class EnhancedDocumentLoader:
             documents.update(doc_dict)
         
         print("\n" + "=" * 70)
-        print(f"✅ Loaded {len(documents)} documents successfully")
-        print(f"📊 Total content: {sum(len(t) for t in documents.values()):,} characters")
+        print(f" Loaded {len(documents)} documents successfully")
+        print(f" Total content: {sum(len(t) for t in documents.values()):,} characters")
         
         return documents
 

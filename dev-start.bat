@@ -1,22 +1,22 @@
 @echo off
 REM dev-start.bat - Windows version of dev-start.sh
 
-echo 🚀 Starting RAG Development Environment
+echo  Starting RAG Development Environment
 echo ======================================
 
 REM Check if Docker is running
 docker info >nul 2>&1
 if errorlevel 1 (
-    echo ❌ Docker is not running. Please start Docker Desktop first.
+    echo  Docker is not running. Please start Docker Desktop first.
     pause
     exit /b 1
 )
 
 REM Check if .env exists
 if not exist .env (
-    echo ⚠️  .env file not found. Creating from template...
+    echo   .env file not found. Creating from template...
     copy .env.example .env
-    echo 📝 Please edit .env and add your GROQ_API_KEY
+    echo  Please edit .env and add your GROQ_API_KEY
     echo    Then run this script again.
     pause
     exit /b 1
@@ -26,17 +26,17 @@ REM Build and start services
 echo 🔨 Building containers...
 docker compose -f docker-compose.dev.yml build
 
-echo 🚀 Starting all services...
+echo  Starting all services...
 docker compose -f docker-compose.dev.yml up -d redis chroma worker
 
 echo ⏳ Waiting for services to be ready...
 timeout /t 10 /nobreak >nul
 
-echo 📊 Checking database status...
+echo  Checking database status...
 docker compose -f docker-compose.dev.yml exec -T backend python -c "import chromadb; client = chromadb.PersistentClient(path='/app/chroma_db'); print('Chunks:', client.get_collection('collection').count() if 'collection' in [c.name for c in client.list_collections()] else 0)" 2>nul
 
 echo.
-echo ✅ Development environment ready!
+echo  Development environment ready!
 echo =================================
 echo.
 echo 🖥️  TERMINAL 1 - Backend:

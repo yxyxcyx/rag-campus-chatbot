@@ -24,8 +24,8 @@
     "ground_truth": "The library provides main services as described in section 15.1 Main Services of the Library User's Guide."
   },
   {
-    "question": "What are the residence management rules and regulations?",
-    "ground_truth": "Residences Management Rules & Regulations are detailed in section 13.0 and 13.1 of the handbook, covering accommodation policies and student housing guidelines."
+    "question": "What are the operating hours for the swimming pool?",
+    "ground_truth": "The swimming pool operates from Tuesday to Sunday, 4:00pm to 10:00pm. It is closed on Mondays and Public Holidays."
   },
   {
     "question": "What is the English Lounge and what does it offer?",
@@ -56,7 +56,7 @@
     "ground_truth": "The university's vision and mission are described in section 1.2 under General Information, outlining the institution's goals and objectives."
   },
   {
-    "question": "Where can I find general information about the university?",
-    "ground_truth": "General information about the university is provided in section 1.0, including introduction (section 1.1) and the university's vision and mission (section 1.2)."
+    "question": "What is the fee to retake a Science course?",
+    "ground_truth": "The fee for retaking a Science course is RM550.00 per credit hour."
   }
 ]

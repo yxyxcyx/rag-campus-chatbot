@@ -14,9 +14,14 @@ Usage:
 """
 
 import sys
+import os
 import argparse
 from celery.result import AsyncResult
-from enhanced_ingestion_worker import process_document, clear_collection, get_collection_stats
+
+# Add src to path for imports
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'src'))
+
+from ingestion_worker import process_document, clear_collection, get_collection_stats
 from celery_config import celery_app
 
 
@@ -55,7 +60,7 @@ def main():
         
         if not args.async_mode:
             result = task.get(timeout=300)
-            print(f"✅ Result: {result}")
+            print(f" Result: {result}")
         else:
             print(f"📋 Task ID: {task.id}")
             print("Task dispatched. Check status with task ID.")
@@ -63,12 +68,12 @@ def main():
 
     # Handle stats operation
     if args.stats:
-        print("📊 Fetching collection statistics...")
+        print(" Fetching collection statistics...")
         task = get_collection_stats.delay()
         
         if not args.async_mode:
             result = task.get(timeout=30)
-            print(f"✅ Result: {result}")
+            print(f" Result: {result}")
         else:
             print(f"📋 Task ID: {task.id}")
         return
@@ -90,7 +95,7 @@ def main():
             result = task.get(timeout=3600)  # 1 hour timeout
             
             print("\n" + "="*60)
-            print("✅ INGESTION COMPLETE")
+            print(" INGESTION COMPLETE")
             print("="*60)
             print(f"Status: {result.get('status')}")
             print(f"Message: {result.get('message')}")
@@ -102,7 +107,7 @@ def main():
             print("="*60)
             
         except Exception as e:
-            print(f"\n❌ Error waiting for task: {e}")
+            print(f"\n Error waiting for task: {e}")
             print(f"Task ID {task.id} may still be running.")
             print("Check worker logs for details.")
     else:

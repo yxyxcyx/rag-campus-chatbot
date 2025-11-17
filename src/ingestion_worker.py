@@ -17,7 +17,12 @@ from langchain_huggingface import HuggingFaceEmbeddings
 import chromadb
 
 from celery_config import celery_app
-from enhanced_document_loader import load_documents_from_folder
+from enhanced_document_loader import EnhancedDocumentLoader
+
+def load_documents_from_folder(folder_path: str):
+    """Wrapper for enhanced document loader"""
+    loader = EnhancedDocumentLoader(dpi=2.0, parallel_workers=4)
+    return loader.load_folder(folder_path)
 from rag_pipeline import chunk_text, embed_chunks
 
 # Task logger
@@ -57,7 +62,7 @@ class CallbackTask(Task):
         return self._collection
 
 
-@celery_app.task(bind=True, base=CallbackTask, name='enhanced_ingestion_worker.process_document')
+@celery_app.task(bind=True, base=CallbackTask, name='ingestion_worker.process_document')
 def process_document(self, file_path: str, window_size: int = 3) -> Dict[str, any]:
     """
     Process documents using enhanced OCR and sentence-window retrieval
@@ -140,7 +145,7 @@ def process_document(self, file_path: str, window_size: int = 3) -> Dict[str, an
         }
 
 
-@celery_app.task(bind=True, base=CallbackTask, name='enhanced_ingestion_worker.clear_collection')
+@celery_app.task(bind=True, base=CallbackTask, name='ingestion_worker.clear_collection')
 def clear_collection(self) -> Dict[str, any]:
     """Clear all documents from the collection."""
     logger.info("Clearing collection...")
@@ -164,7 +169,7 @@ def clear_collection(self) -> Dict[str, any]:
         }
 
 
-@celery_app.task(name='enhanced_ingestion_worker.get_collection_stats')
+@celery_app.task(name='ingestion_worker.get_collection_stats')
 def get_collection_stats() -> Dict[str, any]:
     """Get statistics about the current collection."""
     try:

@@ -19,7 +19,7 @@ ASK_ENDPOINT = f"{API_BASE_URL}/ask"
 # Page Configuration
 st.set_page_config(
     page_title="XMUM AI Chatbot",
-    page_icon="🤖",
+    page_icon="",
     layout="centered"
 )
 
