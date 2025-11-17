@@ -102,7 +102,7 @@ rag-campus-chatbot/
 ├── src/                          # Core application code
 │   ├── main.py                   # FastAPI backend
 │   ├── app.py                    # Streamlit frontend
-│   ├── rag_pipeline.py           # Advanced RAG pipeline
+│   ├── rag_pipeline.py           # RAG pipeline
 │   ├── ingestion_worker.py       # Enhanced Celery worker
 │   ├── celery_config.py          # Celery configuration
 │   ├── enhanced_document_loader.py
@@ -269,12 +269,12 @@ COLLECTION_NAME=collection
 ### RAG Pipeline Features
 
 **Enhanced Document Loading:**
-- Advanced OCR for image-based PDFs
+- OCR for image-based PDFs
 - Multi-format support (PDF, DOCX, TXT)
 - Parallel processing for faster ingestion
 
 **Sentence-Window Retrieval:**
-- SOTA chunking technique for better precision
+- Chunking technique for better precision
 - Context-aware window sizing
 - Improved boundary handling
 
@@ -303,26 +303,3 @@ The project includes comprehensive evaluation using RAGAs:
 - Automated performance monitoring
 - CI/CD integration ready
 - Threshold-based model validation
-
----
-
-## Migration Notes
-
-This guide reflects the **refactored project structure** with:
-
- **Consolidated Logic**: Advanced pipeline is now the default  
- **Clean Structure**: Proper separation of concerns  
- **Optimized Dependencies**: Component-specific requirements  
- **Simplified Documentation**: Single source of truth  
-
-**Breaking Changes:**
-- File locations moved to `src/` and `scripts/`
-- Import paths updated for new structure
-- Docker configurations optimized
-- Requirements split by component
-
-**Migration Benefits:**
-- Faster build times
-- Smaller images  
-- Improved maintainability
-- Better developer experience
