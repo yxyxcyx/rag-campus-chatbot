@@ -135,20 +135,25 @@ jobs:
         run: |
           python -c "import redis; r = redis.Redis(host='localhost', port=6379); r.ping(); print('✓ Redis connected')"
 
-      - name: Check if evaluation dataset exists
-        id: check-eval-data
+      - name: Determine evaluation readiness
+        id: eval-ready
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
-          if [ -f "eval_dataset.json" ]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-            echo "✓ Evaluation dataset found"
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-            echo "⚠ Evaluation dataset not found - skipping evaluation"
+          run_eval=true
+          if [ -z "$GROQ_API_KEY" ]; then
+            echo "⚠ GROQ_API_KEY not configured. Skipping evaluation."
+            run_eval=false
           fi
+          if [ ! -f "eval_dataset.json" ]; then
+            echo "⚠ eval_dataset.json not found. Skipping evaluation."
+            run_eval=false
+          fi
+          echo "run_eval=$run_eval" >> $GITHUB_OUTPUT
 
       - name: Run RAG Evaluation
         id: run-evaluation
-        if: steps.check-eval-data.outputs.exists == 'true'
+        if: steps.eval-ready.outputs.run_eval == 'true'
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           REDIS_HOST: localhost
@@ -161,7 +166,7 @@ jobs:
 
       - name: Check if evaluation results exist
         id: check-results
-        if: steps.check-eval-data.outputs.exists == 'true'
+        if: steps.eval-ready.outputs.run_eval == 'true'
         run: |
           if [ -f evaluation_results/ragas_results_*.csv ]; then
             echo "results_exist=true" >> $GITHUB_OUTPUT
@@ -185,11 +190,13 @@ jobs:
           retention-days: 30
 
       - name: Generate evaluation summary
-        if: always() && steps.check-eval-data.outputs.exists == 'true'
+        if: always()
         run: |
           echo "## RAG Evaluation Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          if [ -f evaluation_results/ragas_results_*.csv ]; then
+          if [ "${{ steps.eval-ready.outputs.run_eval }}" != "true" ]; then
+            echo "Evaluation skipped (missing GROQ_API_KEY or eval_dataset.json)." >> $GITHUB_STEP_SUMMARY
+          elif [ -f evaluation_results/ragas_results_*.csv ]; then
             echo "Evaluation completed successfully" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "Results saved to artifacts." >> $GITHUB_STEP_SUMMARY
@@ -207,6 +214,7 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     
     strategy:
+      max-parallel: 1
       matrix:
         service: [api, worker, ui]
     
@@ -216,6 +224,14 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Free disk space
+        run: |
+          echo "Before cleanup:" && df -h
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /opt/ghc || true
+          docker system prune -af || true
+          echo "After cleanup:" && df -h
 
       - name: Log in to GitHub Container Registry
         if: github.event_name == 'push'
