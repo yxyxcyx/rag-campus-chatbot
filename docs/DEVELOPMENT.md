@@ -336,9 +336,15 @@ Name: GROQ_API_KEY
 Value: <your-groq-api-key>
 ```
 
-**2. Enable GitHub Container Registry (optional):**
-- Settings → Packages → Connect repository
-- Enables automatic Docker image publishing
+**2. Enable GitHub Container Registry (optional for image publishing):**
+
+By default, images are built but NOT pushed to registry.
+
+To enable image publishing to GHCR:
+- Settings → Actions → General → Workflow permissions
+- Select "Read and write permissions"
+- Update workflow file to set `push: true` in Docker build step
+- See main README for detailed instructions
 
 **3. Configure Branch Protection (recommended):**
 ```bash

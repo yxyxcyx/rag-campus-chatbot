@@ -305,11 +305,26 @@ Name: GROQ_API_KEY
 Value: your_groq_api_key_here
 ```
 
-**Optional: Enable GitHub Container Registry**
-```bash
-# Settings → Packages → Connect repository
-# This allows the pipeline to push Docker images
+**Optional: Enable GitHub Container Registry (for image publishing)**
+
+By default, images are **built but not pushed** to avoid permission errors.
+
+To enable image publishing:
+1. Go to your repository Settings → Actions → General
+2. Scroll to "Workflow permissions"
+3. Select "Read and write permissions"
+4. Check "Allow GitHub Actions to create and approve pull requests"
+5. Save changes
+
+Then update `.github/workflows/mlops-pipeline.yml`:
+```yaml
+# Change line 247 from:
+push: false
+# To:
+push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
 ```
+
+This will push images only on main branch commits.
 
 ### Quality Gates
 

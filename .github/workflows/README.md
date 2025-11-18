@@ -119,12 +119,17 @@ docker compose build
 
 ### Docker Build Fails
 
-**Problem:** Missing Dockerfile or build context issues
+**Problem:** Missing Dockerfile, build context issues, or "denied: installation not allowed to Create organization package"
 
 **Solution:**
 1. Verify all Dockerfiles exist: `Dockerfile.api`, `Dockerfile.worker`, `Dockerfile.ui`
 2. Check `requirements/` directory has all necessary files
 3. Review build logs for missing dependencies
+
+**For "installation not allowed" error:**
+- This is expected - images are **built but not pushed** by default
+- To enable pushing to GitHub Container Registry, see main README CI/CD section
+- The build still succeeds; only the push is disabled
 
 ### Quality Gates Failing
 

@@ -1,4 +1,4 @@
-name: MLOps Pipeline - RAG System
+name: Pipeline
 
 on:
   push:
@@ -7,15 +7,18 @@ on:
     branches: [ main, develop ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+
 env:
   PYTHON_VERSION: '3.11'
   REGISTRY: ghcr.io
   IMAGE_PREFIX: ${{ github.repository }}
 
 jobs:
-  # ============================================================================
   # JOB 1: Code Quality & Linting
-  # ============================================================================
   code-quality:
     name: Code Quality Checks
     runs-on: ubuntu-latest
@@ -50,9 +53,7 @@ jobs:
           isort --check-only src/ scripts/ || echo "Warning: Import ordering issues found"
         continue-on-error: true
 
-  # ============================================================================
   # JOB 2: Unit Tests
-  # ============================================================================
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest
@@ -82,9 +83,7 @@ jobs:
           pytest tests/ -v --tb=short || echo "No tests found or tests failed - continuing"
         continue-on-error: true
 
-  # ============================================================================
   # JOB 3: RAG Evaluation & Performance Gate
-  # ============================================================================
   rag-evaluation:
     name: RAG Pipeline Evaluation
     runs-on: ubuntu-latest
@@ -188,21 +187,19 @@ jobs:
       - name: Generate evaluation summary
         if: always() && steps.check-eval-data.outputs.exists == 'true'
         run: |
-          echo "## RAG Evaluation Results 📊" >> $GITHUB_STEP_SUMMARY
+          echo "## RAG Evaluation Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ -f evaluation_results/ragas_results_*.csv ]; then
-            echo "✅ Evaluation completed successfully" >> $GITHUB_STEP_SUMMARY
+            echo "Evaluation completed successfully" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "Results saved to artifacts." >> $GITHUB_STEP_SUMMARY
           else
-            echo "⚠️ Evaluation did not produce results (may have failed or been skipped)" >> $GITHUB_STEP_SUMMARY
+            echo "Evaluation did not produce results (may have failed or been skipped)" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "This is OK for PRs without evaluation dataset." >> $GITHUB_STEP_SUMMARY
           fi
 
-  # ============================================================================
   # JOB 4: Build Docker Images
-  # ============================================================================
   build-images:
     name: Build & Test Docker Images
     runs-on: ubuntu-latest
@@ -221,11 +218,13 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GitHub Container Registry
+        if: github.event_name == 'push'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
 
       - name: Extract metadata
         id: meta
@@ -240,32 +239,29 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build and push Docker image
+      - name: Build Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile.${{ matrix.service }}
-          push: ${{ github.event_name != 'pull_request' }}
+          push: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
+          load: true
 
       - name: Generate build summary
         run: |
-          echo "## Docker Build - ${{ matrix.service }} 🐳" >> $GITHUB_STEP_SUMMARY
+          echo "## Docker Build - ${{ matrix.service }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Successfully built ${{ matrix.service }} image" >> $GITHUB_STEP_SUMMARY
+          echo "Successfully built ${{ matrix.service }} image" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Tags:**" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "**Note:** Images are built but not pushed to registry." >> $GITHUB_STEP_SUMMARY
+          echo "To enable image publishing, see README CI/CD section." >> $GITHUB_STEP_SUMMARY
 
-  # ============================================================================
   # JOB 5: Integration Tests (Optional)
-  # ============================================================================
   integration-tests:
     name: Integration Tests
     runs-on: ubuntu-latest
@@ -307,9 +303,7 @@ jobs:
         run: |
           docker compose down -v
 
-  # ============================================================================
   # JOB 6: Security Scanning
-  # ============================================================================
   security-scan:
     name: Security Vulnerability Scan
     runs-on: ubuntu-latest
@@ -330,15 +324,13 @@ jobs:
         continue-on-error: true
 
       - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
         continue-on-error: true
 
-  # ============================================================================
   # JOB 7: Deployment Ready Check
-  # ============================================================================
   deployment-ready:
     name: Deployment Ready
     runs-on: ubuntu-latest
@@ -348,7 +340,7 @@ jobs:
     steps:
       - name: Deployment ready notification
         run: |
-          echo "## 🚀 Deployment Ready" >> $GITHUB_STEP_SUMMARY
+          echo "## Deployment Ready" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "All checks passed! System is ready for deployment." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
