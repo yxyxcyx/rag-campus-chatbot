@@ -303,3 +303,85 @@ The project includes comprehensive evaluation using RAGAs:
 - Automated performance monitoring
 - CI/CD integration ready
 - Threshold-based model validation
+
+---
+
+## CI/CD Pipeline
+
+### GitHub Actions Workflow
+
+The project includes a comprehensive MLOps pipeline at `.github/workflows/mlops-pipeline.yml`.
+
+**Pipeline triggers:**
+- Push to `main` or `develop` branches
+- Pull requests to `main` or `develop`
+- Manual workflow dispatch
+
+**Pipeline jobs:**
+
+1. **code-quality**: Runs flake8, black, and isort checks
+2. **unit-tests**: Executes pytest test suite
+3. **rag-evaluation**: Runs RAGAs evaluation and enforces quality thresholds
+4. **build-images**: Builds Docker images for api, worker, and ui services
+5. **integration-tests**: Tests full system with Docker Compose (main branch only)
+6. **security-scan**: Runs Trivy vulnerability scanner
+7. **deployment-ready**: Final validation and deployment notification
+
+### Setting Up CI/CD
+
+**1. Add GitHub Secret:**
+```bash
+Repository Settings → Secrets and variables → Actions → New secret
+Name: GROQ_API_KEY
+Value: <your-groq-api-key>
+```
+
+**2. Enable GitHub Container Registry (optional):**
+- Settings → Packages → Connect repository
+- Enables automatic Docker image publishing
+
+**3. Configure Branch Protection (recommended):**
+```bash
+Settings → Branches → Add rule
+- Require status checks to pass
+- Require pull request reviews
+- Enable "rag-evaluation" and "code-quality" checks
+```
+
+### Local Testing Before Push
+
+Run the same checks locally:
+
+```bash
+# Code quality
+flake8 src/ scripts/
+black --check src/ scripts/
+isort --check-only src/ scripts/
+
+# Tests
+pytest tests/ -v
+
+# RAG evaluation
+python scripts/evaluate.py
+python scripts/check_metrics.py
+
+# Docker builds
+docker compose -f docker-compose.yml build
+```
+
+### Monitoring Pipeline Results
+
+- **Action runs**: GitHub Actions tab
+- **Artifacts**: Download evaluation results (30-day retention)
+- **Images**: `ghcr.io/<username>/rag-campus-chatbot-{api,worker,ui}`
+- **Security**: Security tab → Code scanning alerts
+
+### Quality Thresholds
+
+Defined in `scripts/check_metrics.py`:
+- Context Precision: ≥ 0.70
+- Context Recall: ≥ 0.70  
+- Faithfulness: ≥ 0.70
+- Answer Relevancy: ≥ 0.70
+
+Pipeline will **fail** if any metric is below threshold.

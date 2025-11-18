@@ -49,13 +49,18 @@ docker compose -f docker-compose.dev.yml up frontend
 
 ### Local Development
 ```bash
-# 1. Install dependencies
+# 1. (Recommended) Create and activate a virtual environment
+python -m venv venv
+source venv/bin/activate
+
+# 2. Install dependencies
 pip install -r requirements/dev.txt
 
-# 2. Configure environment  
+# 3. Configure environment  
 cp .env.example .env
+# Edit .env and add your GROQ_API_KEY
 
-# 3. Start services (see docs/DEVELOPMENT.md for details)
+# 4. Start services (see docs/DEVELOPMENT.md for details)
 ```
 
 ** For detailed setup instructions, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)**
@@ -272,6 +277,62 @@ Services (from `docker-compose.yml`):
 - **ui**: Streamlit UI (port 8501)
 - **redis**: Message broker (port 6379)
 - **chroma**: Vector database (port 8001)
+
+---
+
+## CI/CD Pipeline
+
+The project includes a comprehensive MLOps pipeline (`.github/workflows/mlops-pipeline.yml`) that runs on every push and pull request.
+
+### Pipeline Stages
+
+1. **Code Quality**: Linting with flake8, black, and isort
+2. **Unit Tests**: Run pytest on all test files
+3. **RAG Evaluation**: Execute RAGAs metrics and enforce quality gates
+4. **Docker Build**: Build and push images to GitHub Container Registry
+5. **Integration Tests**: End-to-end tests with Docker Compose
+6. **Security Scan**: Trivy vulnerability scanning
+7. **Deployment Ready**: Final validation before deployment
+
+### Setup GitHub Actions
+
+**Required Secret:**
+```bash
+# In your GitHub repository:
+# Settings → Secrets and variables → Actions → New repository secret
+
+Name: GROQ_API_KEY
+Value: your_groq_api_key_here
+```
+
+**Optional: Enable GitHub Container Registry**
+```bash
+# Settings → Packages → Connect repository
+# This allows the pipeline to push Docker images
+```
+
+### Quality Gates
+
+The pipeline enforces these minimum thresholds (defined in `scripts/check_metrics.py`):
+- **Context Precision**: ≥ 0.70
+- **Context Recall**: ≥ 0.70
+- **Faithfulness**: ≥ 0.70
+- **Answer Relevancy**: ≥ 0.70
+
+If any metric falls below the threshold, the pipeline fails and prevents deployment.
+
+### Viewing Results
+
+- **Evaluation Results**: Download from workflow artifacts (retained 30 days)
+- **Docker Images**: Available at `ghcr.io/<your-username>/rag-campus-chatbot-{api,worker,ui}`
+- **Security Scans**: View in Security → Code scanning alerts
+
+### Manual Trigger
+
+You can manually trigger the pipeline:
+```bash
+# Go to Actions tab → MLOps Pipeline → Run workflow
+```
 
 ---
 
