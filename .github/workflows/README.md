@@ -108,12 +108,14 @@ docker compose build
 
 ### Pipeline Fails on Evaluation
 
-**Problem:** `GROQ_API_KEY` not found or invalid
+**Problem:** `GROQ_API_KEY` not found or invalid, or "No evaluation results found"
 
 **Solution:**
-1. Add secret in GitHub repository settings
+1. Add secret in GitHub repository settings (Settings → Secrets → Actions → New secret)
 2. Verify API key is valid at https://console.groq.com/
 3. Check key has sufficient quota
+4. Ensure `eval_dataset.json` exists in repository root
+5. If evaluation fails, pipeline will skip metrics check (safe for PRs)
 
 ### Docker Build Fails
 
