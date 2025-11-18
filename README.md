@@ -433,6 +433,14 @@ Model configuration is split between the FastAPI API (`src/main.py`) and the RAG
 ## Evaluation & Quality
 
 - Latest evaluation run (November 2025) on `eval_dataset.json` passed all four RAGAS quality gates (faithfulness, answer relevancy, context recall, context precision).
+- Latest metrics summary:
+
+```
+context_precision   : 0.9000 (threshold: 0.70)  PASS
+context_recall      : 0.9111 (threshold: 0.70)  PASS
+faithfulness        : 0.8667 (threshold: 0.70)  PASS
+answer_relevancy    : 0.7173 (threshold: 0.70)  PASS
+```
 - Metrics are generated via `python scripts/evaluate.py` and enforced with `python scripts/check_metrics.py`, which compares results against the thresholds codified in `scripts/check_metrics.py`.
 - CSV outputs remain under `evaluation_results/` for traceability; rerun the evaluation anytime after changing documents, prompts, or model settings.
 
@@ -496,6 +504,3 @@ Current limitations:
 
 For questions or issues, please open a GitHub issue.
 
----
-
-**Last Updated**: November 2025
