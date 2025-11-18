@@ -149,7 +149,13 @@ jobs:
             echo "⚠ eval_dataset.json not found. Skipping evaluation."
             run_eval=false
           fi
+          data_files=$(find data -type f 2>/dev/null | wc -l)
+          if [ "$data_files" -eq 0 ]; then
+            echo "⚠ data/ directory has no files. Skipping evaluation."
+            run_eval=false
+          fi
           echo "run_eval=$run_eval" >> $GITHUB_OUTPUT
+          echo "data_files=$data_files" >> $GITHUB_OUTPUT
 
       - name: Run RAG Evaluation
         id: run-evaluation
@@ -195,7 +201,8 @@ jobs:
           echo "## RAG Evaluation Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ "${{ steps.eval-ready.outputs.run_eval }}" != "true" ]; then
-            echo "Evaluation skipped (missing GROQ_API_KEY or eval_dataset.json)." >> $GITHUB_STEP_SUMMARY
+            echo "Evaluation skipped (missing GROQ_API_KEY, eval_dataset.json, or data files)." >> $GITHUB_STEP_SUMMARY
+            echo "Data files detected: ${{ steps.eval-ready.outputs.data_files }}" >> $GITHUB_STEP_SUMMARY
           elif [ -f evaluation_results/ragas_results_*.csv ]; then
             echo "Evaluation completed successfully" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
@@ -230,8 +237,14 @@ jobs:
           echo "Before cleanup:" && df -h
           sudo rm -rf /usr/share/dotnet || true
           sudo rm -rf /opt/ghc || true
+          sudo rm -rf /opt/hostedtoolcache || true
+          sudo rm -rf /usr/local/lib/android || true
           docker system prune -af || true
           echo "After cleanup:" && df -h
+
+      - name: Prune Docker builder cache
+        run: |
+          docker builder prune -af || true
 
       - name: Log in to GitHub Container Registry
         if: github.event_name == 'push'
