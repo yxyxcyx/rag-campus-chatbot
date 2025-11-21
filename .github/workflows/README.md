@@ -29,6 +29,28 @@ Value: your_groq_api_key_here
 
 ### Optional Configuration
 
+**Configure Retrieval Settings (for RAG evaluation and integration tests):**
+
+You can customize the retrieval behavior in CI/CD by adding repository variables:
+```
+Repository → Settings → Secrets and variables → Actions → Variables tab → New repository variable
+```
+
+Available variables:
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ENABLE_HYBRID_SEARCH` | `false` | Enable BM25 + Vector hybrid search |
+| `BM25_WEIGHT` | `0.3` | Weight for keyword matching (if hybrid enabled) |
+| `VECTOR_WEIGHT` | `0.7` | Weight for semantic similarity (if hybrid enabled) |
+| `USE_DIVERSITY_FILTER` | `true` | Remove redundant/duplicate results |
+| `DIVERSITY_THRESHOLD` | `0.85` | Similarity threshold for duplicate detection |
+
+**Example: Enable Hybrid Search in CI/CD:**
+1. Go to Settings → Secrets and variables → Actions → Variables
+2. Add variable: `ENABLE_HYBRID_SEARCH` = `true`
+3. Add variable: `BM25_WEIGHT` = `0.3`
+4. Add variable: `VECTOR_WEIGHT` = `0.7`
+
 **Enable Container Registry (for Docker images):**
 ```
 Repository → Settings → Packages → Connect repository

@@ -310,23 +310,31 @@ def diversity_filter(documents: List[str], threshold: float = 0.8) -> List[str]:
     return filtered
 
 
-# Backwards-compatible retrieval helper
+# Enhanced retrieval with diversity filtering
 def retrieve_and_rerank(
     query: str,
     embedding_model: HuggingFaceEmbeddings,
     collection: chromadb.Collection,
     cross_encoder: CrossEncoder,
     n_initial: int = 20,
-    n_final: int = 3,
+    n_final: int = 5,  # Increased to allow diversity filtering
+    use_diversity_filter: bool = True,
+    diversity_threshold: float = 0.85
 ) -> List[str]:
-    """Two-stage retrieval used by the FastAPI API and evaluation scripts.
+    """Enhanced retrieval used by the FastAPI API and evaluation scripts.
 
-    This mirrors the behavior of the previous rag_pipeline implementation:
-    1. Vector search in ChromaDB using the query embedding
-    2. Cross-encoder reranking of the retrieved windows
+    Features:
+    1. Query preprocessing and expansion
+    2. Vector search in ChromaDB
+    3. Cross-encoder reranking
+    4. Diversity filtering to remove redundant results
     """
+    # Query preprocessing
+    processor = QueryProcessor()
+    clean_query = processor.clean_query(query)
+    
     # Stage 1: initial vector retrieval from ChromaDB
-    query_embedding = embedding_model.embed_query(query)
+    query_embedding = embedding_model.embed_query(clean_query)
     initial_results = collection.query(
         query_embeddings=[query_embedding],
         n_results=n_initial,
@@ -339,12 +347,102 @@ def retrieve_and_rerank(
     retrieved_windows = documents[0]
 
     # Stage 2: precise reranking with cross-encoder
-    pairs = [[query, window] for window in retrieved_windows]
+    pairs = [[clean_query, window] for window in retrieved_windows]
     scores = cross_encoder.predict(pairs)
 
+    # Get more results initially to allow for diversity filtering
+    rerank_top_k = n_final * 2 if use_diversity_filter else n_final
     scored_windows = sorted(zip(scores, retrieved_windows), reverse=True)
-    top_windows = [window for score, window in scored_windows[:n_final]]
-    return top_windows
+    top_windows = [window for score, window in scored_windows[:rerank_top_k]]
+    
+    # Stage 3: Apply diversity filter to remove redundancy
+    if use_diversity_filter and len(top_windows) > 1:
+        top_windows = diversity_filter(top_windows, threshold=diversity_threshold)
+    
+    # Return final top results
+    return top_windows[:n_final]
+
+
+def retrieve_and_rerank_hybrid(
+    query: str,
+    embedding_model: HuggingFaceEmbeddings,
+    collection: chromadb.Collection,
+    cross_encoder: CrossEncoder,
+    bm25_index: Optional[BM25Okapi] = None,
+    documents: Optional[List[str]] = None,
+    n_initial: int = 30,
+    n_final: int = 5,
+    bm25_weight: float = 0.3,
+    vector_weight: float = 0.7,
+    use_diversity_filter: bool = True,
+    diversity_threshold: float = 0.85
+) -> List[str]:
+    """Hybrid retrieval with BM25 + Vector search when BM25 index is available.
+    
+    Falls back to enhanced vector-only retrieval if BM25 is not available.
+    """
+    # If BM25 index not available, fall back to enhanced vector retrieval
+    if bm25_index is None or documents is None:
+        return retrieve_and_rerank(
+            query, embedding_model, collection, cross_encoder,
+            n_initial, n_final, use_diversity_filter, diversity_threshold
+        )
+    
+    # Query preprocessing
+    processor = QueryProcessor()
+    clean_query = processor.clean_query(query)
+    
+    # Stage 1a: BM25 retrieval
+    tokenized_query = clean_query.lower().split()
+    bm25_scores = bm25_index.get_scores(tokenized_query)
+    bm25_top_indices = np.argsort(bm25_scores)[::-1][:n_initial]
+    bm25_results = {idx: bm25_scores[idx] for idx in bm25_top_indices if bm25_scores[idx] > 0}
+    
+    # Stage 1b: Vector retrieval
+    query_embedding = embedding_model.embed_query(clean_query)
+    vector_results = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=n_initial,
+    )
+    
+    # Combine scores
+    combined_scores = {}
+    
+    # Add BM25 scores
+    for idx, score in bm25_results.items():
+        if idx < len(documents):
+            combined_scores[documents[idx]] = bm25_weight * score
+    
+    # Add vector scores  
+    if vector_results.get("documents") and vector_results["documents"][0]:
+        retrieved_docs = vector_results["documents"][0]
+        distances = vector_results.get("distances", [[]])[0]
+        for doc, dist in zip(retrieved_docs, distances):
+            similarity = 1 - dist  # Convert distance to similarity
+            combined_scores[doc] = combined_scores.get(doc, 0) + vector_weight * similarity
+    
+    # Sort by combined score
+    sorted_docs = sorted(combined_scores.items(), key=lambda x: x[1], reverse=True)
+    top_docs = [doc for doc, _ in sorted_docs[:n_initial]]
+    
+    if not top_docs:
+        return []
+    
+    # Stage 2: Cross-encoder reranking
+    pairs = [[clean_query, doc] for doc in top_docs]
+    scores = cross_encoder.predict(pairs)
+    
+    # Get more results initially to allow for diversity filtering
+    rerank_top_k = n_final * 2 if use_diversity_filter else n_final
+    scored_docs = sorted(zip(scores, top_docs), reverse=True)
+    reranked_docs = [doc for score, doc in scored_docs[:rerank_top_k]]
+    
+    # Stage 3: Apply diversity filter
+    if use_diversity_filter and len(reranked_docs) > 1:
+        reranked_docs = diversity_filter(reranked_docs, threshold=diversity_threshold)
+    
+    # Return final top results
+    return reranked_docs[:n_final]
 
 
 # ============================================================================

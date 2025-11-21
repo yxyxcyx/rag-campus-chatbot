@@ -45,8 +45,10 @@ from rag_pipeline import (
     chunk_text,
     embed_chunks,
     retrieve_and_rerank,
+    retrieve_and_rerank_hybrid,
     generate_response
 )
+from rank_bm25 import BM25Okapi
 
 # SECTION 1: SETUP
 print("Starting RAG evaluation pipeline...")
@@ -96,6 +98,42 @@ if current_count == 0:
 else:
     print(f"  - Database already populated with {current_count} chunks/windows in collection '{collection_name}'.")
 
+# Load retrieval configuration
+ENABLE_HYBRID_SEARCH = os.getenv('ENABLE_HYBRID_SEARCH', 'false').lower() == 'true'
+BM25_WEIGHT = float(os.getenv('BM25_WEIGHT', '0.3'))
+VECTOR_WEIGHT = float(os.getenv('VECTOR_WEIGHT', '0.7'))
+USE_DIVERSITY_FILTER = os.getenv('USE_DIVERSITY_FILTER', 'true').lower() == 'true'
+DIVERSITY_THRESHOLD = float(os.getenv('DIVERSITY_THRESHOLD', '0.85'))
+
+print("\n  - Retrieval configuration:")
+print(f"    - Hybrid search: {'ENABLED' if ENABLE_HYBRID_SEARCH else 'DISABLED'}")
+print(f"    - Diversity filter: {'ENABLED' if USE_DIVERSITY_FILTER else 'DISABLED'} (threshold: {DIVERSITY_THRESHOLD})")
+
+# Initialize BM25 index if hybrid search is enabled
+bm25_index = None
+all_documents = None
+
+if ENABLE_HYBRID_SEARCH and current_count > 0:
+    print("  - Initializing BM25 index for hybrid search...")
+    try:
+        # Fetch all documents from ChromaDB for BM25
+        all_results = collection.get(limit=current_count)
+        all_documents = all_results.get("documents", [])
+        
+        if all_documents:
+            # Tokenize documents for BM25
+            tokenized_docs = [doc.lower().split() for doc in all_documents]
+            bm25_index = BM25Okapi(tokenized_docs)
+            print(f"    - BM25 index initialized with {len(all_documents)} documents")
+            print(f"    - Weights: BM25={BM25_WEIGHT}, Vector={VECTOR_WEIGHT}")
+        else:
+            print("    - WARNING: Could not fetch documents for BM25 index")
+            ENABLE_HYBRID_SEARCH = False
+    except Exception as e:
+        print(f"    - ERROR initializing BM25: {e}")
+        print("    - Falling back to vector-only search")
+        ENABLE_HYBRID_SEARCH = False
+
 # SECTION 2: DATA PREPARATION
 print("Preparing evaluation data...")
 print("  - Loading evaluation questions and ground truths...")
@@ -110,7 +148,35 @@ answers = []
 contexts = []
 for i, query in enumerate(questions):
     print(f"    - Processing question {i+1}/{len(questions)}: '{query[:50]}...'")
-    retrieved_chunks = retrieve_and_rerank(query, ragas_embeddings, collection, cross_encoder)
+    
+    # Use appropriate retrieval method based on configuration
+    if ENABLE_HYBRID_SEARCH and bm25_index is not None:
+        retrieved_chunks = retrieve_and_rerank_hybrid(
+            query, 
+            ragas_embeddings, 
+            collection, 
+            cross_encoder,
+            bm25_index=bm25_index,
+            documents=all_documents,
+            n_initial=30,
+            n_final=5,
+            bm25_weight=BM25_WEIGHT,
+            vector_weight=VECTOR_WEIGHT,
+            use_diversity_filter=USE_DIVERSITY_FILTER,
+            diversity_threshold=DIVERSITY_THRESHOLD
+        )
+    else:
+        retrieved_chunks = retrieve_and_rerank(
+            query, 
+            ragas_embeddings, 
+            collection, 
+            cross_encoder,
+            n_initial=20,
+            n_final=5,
+            use_diversity_filter=USE_DIVERSITY_FILTER,
+            diversity_threshold=DIVERSITY_THRESHOLD
+        )
+    
     contexts.append(retrieved_chunks)
     context_str = "\n\n".join(retrieved_chunks)
     

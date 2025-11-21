@@ -176,7 +176,21 @@ jobs:
           REDIS_PORT: 6379
           CHROMA_DB_PATH: ./chroma_db
           COLLECTION_NAME: collection
+          # Retrieval configuration (can be overridden via repository variables)
+          ENABLE_HYBRID_SEARCH: ${{ vars.ENABLE_HYBRID_SEARCH || 'false' }}
+          BM25_WEIGHT: ${{ vars.BM25_WEIGHT || '0.3' }}
+          VECTOR_WEIGHT: ${{ vars.VECTOR_WEIGHT || '0.7' }}
+          USE_DIVERSITY_FILTER: ${{ vars.USE_DIVERSITY_FILTER || 'true' }}
+          DIVERSITY_THRESHOLD: ${{ vars.DIVERSITY_THRESHOLD || '0.85' }}
         run: |
+          echo "Retrieval Configuration:"
+          echo "  - Hybrid Search: $ENABLE_HYBRID_SEARCH"
+          echo "  - Diversity Filter: $USE_DIVERSITY_FILTER (threshold: $DIVERSITY_THRESHOLD)"
+          if [ "$ENABLE_HYBRID_SEARCH" = "true" ]; then
+            echo "  - BM25 Weight: $BM25_WEIGHT"
+            echo "  - Vector Weight: $VECTOR_WEIGHT"
+          fi
+          echo ""
           python scripts/evaluate.py
         continue-on-error: true
 
@@ -315,6 +329,12 @@ jobs:
         run: |
           cp .env.example .env
           echo "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" >> .env
+          # Add retrieval configuration (can be overridden via repository variables)
+          echo "ENABLE_HYBRID_SEARCH=${{ vars.ENABLE_HYBRID_SEARCH || 'false' }}" >> .env
+          echo "BM25_WEIGHT=${{ vars.BM25_WEIGHT || '0.3' }}" >> .env
+          echo "VECTOR_WEIGHT=${{ vars.VECTOR_WEIGHT || '0.7' }}" >> .env
+          echo "USE_DIVERSITY_FILTER=${{ vars.USE_DIVERSITY_FILTER || 'true' }}" >> .env
+          echo "DIVERSITY_THRESHOLD=${{ vars.DIVERSITY_THRESHOLD || '0.85' }}" >> .env
 
       - name: Start services with Docker Compose
         run: |
