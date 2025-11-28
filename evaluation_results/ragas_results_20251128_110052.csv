@@ -1,0 +1,16 @@
+question,faithfulness,answer_relevancy,context_recall,context_precision
+What are the tuition fees for undergraduate students?,0.0,0.0,0.5,0.9999999999666667
+What is the policy on fee refunds if a student withdraws?,0.0,0.0,0.0,0.19999999998
+What are the entry requirements for Bachelor's Degree Programmes?,1.0,0.9402776960293595,0.5,0.99999999998
+What is the re-admission policy for students?,1.0,0.6896320050122098,0.5,0.94999999997625
+What are the library operation hours?,1.0,0.9999999999997616,1.0,0.999999999975
+What services does the library provide?,ERROR,ERROR,ERROR,ERROR
+What are the operating hours for the swimming pool?,0.4,0.98848863368229,0.7,0.99999999995
+What is the English Lounge and what does it offer?,ERROR,ERROR,ERROR,ERROR
+What are the graduation requirements?,1.0,0.6319803030833553,1.0,0.99999999998
+What are the academic regulations that apply to students?,1.0,0.9999999999997321,1.0,0.9166666666361111
+What is the mode of payment for fees?,0.6666666666666666,0.7561884325195652,1.0,0.999999999975
+Are there administrative charges for certain services?,ERROR,ERROR,ERROR,ERROR
+What is covered under student admissions?,1.0,0.0,0.0,0.0
+What is the university's vision and mission?,1.0,0.8926715729359919,1.0,0.9999999999666667
+What is the fee to retake a Science course?,1.0,0.34976789413650083,1.0,0.999999999975

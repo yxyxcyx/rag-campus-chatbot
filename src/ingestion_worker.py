@@ -7,6 +7,7 @@ Improvements over standard version:
 - Uses EnhancedDocumentLoader for better OCR
 - Stores additional metadata for hybrid search
 - Prepares data for BM25 indexing
+- Uses centralized configuration
 """
 
 import os
@@ -16,8 +17,12 @@ from celery.utils.log import get_task_logger
 from langchain_huggingface import HuggingFaceEmbeddings
 import chromadb
 
+from config import get_settings
 from celery_config import celery_app
 from enhanced_document_loader import EnhancedDocumentLoader
+
+# Load validated configuration
+settings = get_settings()
 
 def load_documents_from_folder(folder_path: str):
     """Wrapper for enhanced document loader"""
@@ -25,7 +30,7 @@ def load_documents_from_folder(folder_path: str):
     return loader.load_folder(folder_path)
 from rag_pipeline import chunk_text, embed_chunks
 
-# Task logger
+# Task logger (Celery provides its own structured logger)
 logger = get_task_logger(__name__)
 
 
@@ -38,26 +43,30 @@ class CallbackTask(Task):
     @property
     def embedding_model(self):
         if self._embedding_model is None:
-            logger.info("Initializing embedding model (one-time per worker)...")
+            logger.info(
+                "Initializing embedding model (one-time per worker)",
+                extra={"model": settings.embedding_model_name}
+            )
             self._embedding_model = HuggingFaceEmbeddings(
-                model_name='all-MiniLM-L6-v2'
+                model_name=settings.embedding_model_name
             )
         return self._embedding_model
 
     @property
     def chroma_client(self):
         if self._chroma_client is None:
-            logger.info("Connecting to ChromaDB (one-time per worker)...")
-            chroma_path = os.getenv('CHROMA_DB_PATH', './chroma_db')
-            self._chroma_client = chromadb.PersistentClient(path=chroma_path)
+            logger.info(
+                "Connecting to ChromaDB (one-time per worker)",
+                extra={"path": settings.chroma_db_path}
+            )
+            self._chroma_client = chromadb.PersistentClient(path=settings.chroma_db_path)
         return self._chroma_client
 
     @property
     def collection(self):
         if self._collection is None:
-            collection_name = os.getenv('COLLECTION_NAME', 'collection')
             self._collection = self.chroma_client.get_or_create_collection(
-                name=collection_name
+                name=settings.collection_name
             )
         return self._collection
 
@@ -148,13 +157,11 @@ def process_document(self, file_path: str, window_size: int = 3) -> Dict[str, an
 @celery_app.task(bind=True, base=CallbackTask, name='ingestion_worker.clear_collection')
 def clear_collection(self) -> Dict[str, any]:
     """Clear all documents from the collection."""
-    logger.info("Clearing collection...")
+    logger.info("Clearing collection", extra={"collection": settings.collection_name})
     
     try:
-        collection_name = os.getenv('COLLECTION_NAME', 'collection')
-        
-        self.chroma_client.delete_collection(name=collection_name)
-        self._collection = self.chroma_client.create_collection(name=collection_name)
+        self.chroma_client.delete_collection(name=settings.collection_name)
+        self._collection = self.chroma_client.create_collection(name=settings.collection_name)
         
         logger.info("Collection cleared successfully")
         return {
@@ -173,16 +180,14 @@ def clear_collection(self) -> Dict[str, any]:
 def get_collection_stats() -> Dict[str, any]:
     """Get statistics about the current collection."""
     try:
-        chroma_path = os.getenv('CHROMA_DB_PATH', './chroma_db')
-        client = chromadb.PersistentClient(path=chroma_path)
-        collection_name = os.getenv('COLLECTION_NAME', 'collection')
-        collection = client.get_or_create_collection(name=collection_name)
+        client = chromadb.PersistentClient(path=settings.chroma_db_path)
+        collection = client.get_or_create_collection(name=settings.collection_name)
         
         count = collection.count()
         
         return {
             'status': 'success',
-            'collection_name': collection_name,
+            'collection_name': settings.collection_name,
             'total_windows': count,
             'technique': 'enhanced-ocr + sentence-window'
         }

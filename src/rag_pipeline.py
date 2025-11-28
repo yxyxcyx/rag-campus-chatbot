@@ -24,7 +24,6 @@ import pickle
 from typing import List, Dict, Tuple, Optional
 from datetime import datetime, timedelta
 import groq
-from dotenv import load_dotenv
 from langchain_huggingface import HuggingFaceEmbeddings
 from sentence_transformers import CrossEncoder
 import chromadb
@@ -32,6 +31,11 @@ from rank_bm25 import BM25Okapi
 import numpy as np
 from tenacity import retry, stop_after_attempt, retry_if_exception_type
 from requests.exceptions import Timeout
+
+from logging_config import get_logger
+
+# Module logger
+logger = get_logger(__name__)
 
 # Import enhanced loader (conditional for container compatibility)
 try:
@@ -47,7 +51,8 @@ except ImportError:
     SENTENCE_WINDOW_AVAILABLE = False
 
 
-load_dotenv()
+# Config is loaded via centralized config module
+# Settings are passed as parameters to avoid direct os.getenv calls
 
 
 # ============================================================================
@@ -161,7 +166,7 @@ class HybridRetriever:
         tokenized_docs = [doc.lower().split() for doc in documents]
         self.bm25 = BM25Okapi(tokenized_docs)
         
-        print(f" Hybrid Retriever initialized with {len(documents)} documents")
+        logger.info("Hybrid Retriever initialized", document_count=len(documents))
     
     def retrieve_bm25(self, query: str, top_k: int = 10) -> List[Tuple[int, float]]:
         """
@@ -520,7 +525,7 @@ class SemanticCache:
             similarity = self._compute_similarity(query_embedding, cache_entry['embedding'])
             
             if similarity >= self.similarity_threshold:
-                print(f" Cache hit! Similarity: {similarity:.3f}")
+                logger.info("Cache hit", similarity=round(similarity, 3))
                 return cache_entry['response']
         
         return None
@@ -579,7 +584,11 @@ Instructions:
 
 Answer:"""
     
-    client = groq.Groq(api_key=os.environ.get("GROQ_API_KEY"))
+    # Import config here to get API key from centralized config
+    from config import get_settings
+    settings = get_settings()
+    
+    client = groq.Groq(api_key=settings.groq_api_key)
     chat_completion = client.chat.completions.create(
         messages=[
             {

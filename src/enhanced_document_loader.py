@@ -29,6 +29,11 @@ import pytesseract
 import numpy as np
 from tqdm import tqdm
 
+from logging_config import get_logger
+
+# Module logger
+logger = get_logger(__name__)
+
 
 class EnhancedDocumentLoader:
     """Advanced document loader with OCR and preprocessing"""
@@ -104,7 +109,11 @@ class EnhancedDocumentLoader:
                     text = ocr_text
                     
             except Exception as e:
-                print(f"Warning: OCR failed for page {page_num + 1}: {e}")
+                logger.warning(
+                    "OCR failed for page",
+                    page_num=page_num + 1,
+                    error=str(e)
+                )
         
         return page_num, text
     
@@ -122,8 +131,7 @@ class EnhancedDocumentLoader:
         doc = fitz.open(filepath)
         filename = os.path.basename(filepath)
         
-        print(f"\n📄 Processing: {filename}")
-        print(f"   Pages: {len(doc)}")
+        logger.info("Processing PDF", filename=filename, pages=len(doc))
         
         # Quick scan to determine if OCR is needed
         text_pages = 0
@@ -134,9 +142,17 @@ class EnhancedDocumentLoader:
         ocr_needed = text_pages < len(doc) * 0.5  # >50% pages need OCR
         
         if ocr_needed:
-            print(f"   📸 OCR Mode: {len(doc) - text_pages}/{len(doc)} pages need OCR")
+            logger.info(
+                "OCR mode enabled",
+                ocr_pages=len(doc) - text_pages,
+                total_pages=len(doc)
+            )
         else:
-            print(f"    Text Mode: {text_pages}/{len(doc)} pages have text")
+            logger.info(
+                "Text extraction mode",
+                text_pages=text_pages,
+                total_pages=len(doc)
+            )
         
         # Extract pages
         if self.parallel_workers > 1 and len(doc) > 5:
@@ -175,39 +191,44 @@ class EnhancedDocumentLoader:
         total_text = sum(len(text) for text in results.values())
         non_empty = sum(1 for text in results.values() if len(text.strip()) > 50)
         
-        print(f"    Extracted {non_empty}/{len(results)} pages successfully")
-        print(f"    Total text: {total_text:,} characters")
+        logger.info(
+            "PDF extraction complete",
+            filename=filename,
+            pages_extracted=non_empty,
+            total_pages=len(results),
+            total_characters=total_text
+        )
         
         return {filename: "\n\n".join(results.values())}
     
     def load_docx(self, filepath: str) -> Dict[str, str]:
         """Load DOCX file"""
         filename = os.path.basename(filepath)
-        print(f"\n📄 Processing: {filename}")
+        logger.info("Processing DOCX", filename=filename)
         
         doc = docx.Document(filepath)
         text = "\n\n".join([para.text for para in doc.paragraphs if para.text.strip()])
         
-        print(f"    Extracted {len(text):,} characters")
+        logger.info("DOCX extraction complete", filename=filename, characters=len(text))
         
         return {filename: text}
     
     def load_txt(self, filepath: str) -> Dict[str, str]:
         """Load TXT file"""
         filename = os.path.basename(filepath)
-        print(f"\n📄 Processing: {filename}")
+        logger.info("Processing TXT", filename=filename)
         
         with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
             text = f.read()
         
-        print(f"    Extracted {len(text):,} characters")
+        logger.info("TXT extraction complete", filename=filename, characters=len(text))
         
         return {filename: text}
     
     def load_image(self, filepath: str) -> Dict[str, str]:
         """Load and OCR image file"""
         filename = os.path.basename(filepath)
-        print(f"\n📄 Processing: {filename}")
+        logger.info("Processing image", filename=filename)
         
         try:
             img = Image.open(filepath)
@@ -218,11 +239,11 @@ class EnhancedDocumentLoader:
                 lang='eng'
             )
             
-            print(f"    Extracted {len(text):,} characters")
+            logger.info("Image OCR complete", filename=filename, characters=len(text))
             
             return {filename: text}
         except Exception as e:
-            print(f"    Error: {e}")
+            logger.error("Image processing failed", filename=filename, error=str(e))
             return {filename: ""}
     
     def load_document(self, filepath: str) -> Dict[str, str]:
@@ -242,7 +263,7 @@ class EnhancedDocumentLoader:
         elif ext in ['.png', '.jpg', '.jpeg', '.tiff', '.bmp']:
             return self.load_image(filepath)
         else:
-            print(f"  Unsupported format: {ext}")
+            logger.warning("Unsupported format", extension=ext, filepath=filepath)
             return {}
     
     def load_folder(self, folder_path: str) -> Dict[str, str]:
@@ -252,8 +273,7 @@ class EnhancedDocumentLoader:
         Returns:
             Dictionary mapping filenames to extracted text
         """
-        print(f"\n🗂️  Loading documents from: {folder_path}")
-        print("=" * 70)
+        logger.info("Loading documents from folder", folder=folder_path)
         
         documents = {}
         files = [
@@ -261,16 +281,19 @@ class EnhancedDocumentLoader:
             if not f.startswith('.') and os.path.isfile(os.path.join(folder_path, f))
         ]
         
-        print(f"Found {len(files)} files\n")
+        logger.info("Files found", file_count=len(files))
         
         for filename in files:
             filepath = os.path.join(folder_path, filename)
             doc_dict = self.load_document(filepath)
             documents.update(doc_dict)
         
-        print("\n" + "=" * 70)
-        print(f" Loaded {len(documents)} documents successfully")
-        print(f" Total content: {sum(len(t) for t in documents.values()):,} characters")
+        total_chars = sum(len(t) for t in documents.values())
+        logger.info(
+            "Folder loading complete",
+            documents_loaded=len(documents),
+            total_characters=total_chars
+        )
         
         return documents
 
@@ -287,6 +310,10 @@ def load_documents_from_folder(folder_path: str) -> Dict[str, str]:
 if __name__ == "__main__":
     # Test the loader
     import sys
+    from logging_config import setup_logging
+    
+    # Setup logging for standalone execution
+    setup_logging(level="INFO", json_output=False, app_name="doc-loader")
     
     if len(sys.argv) > 1:
         path = sys.argv[1]
@@ -300,6 +327,6 @@ if __name__ == "__main__":
     else:
         docs = loader.load_folder(path)
     
-    print("\n\n📋 SUMMARY:")
+    logger.info("Loading summary", documents=len(docs))
     for filename, text in docs.items():
-        print(f"  {filename}: {len(text):,} characters")
+        logger.info("Document loaded", filename=filename, characters=len(text))

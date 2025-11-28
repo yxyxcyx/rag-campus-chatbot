@@ -137,7 +137,8 @@ if ENABLE_HYBRID_SEARCH and current_count > 0:
 # SECTION 2: DATA PREPARATION
 print("Preparing evaluation data...")
 print("  - Loading evaluation questions and ground truths...")
-with open('eval_dataset.json', 'r') as f:
+eval_dataset_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'tests', 'eval_dataset.json')
+with open(eval_dataset_path, 'r') as f:
     eval_data = json.load(f)
 questions = [item['question'] for item in eval_data]
 ground_truths = [item['ground_truth'] for item in eval_data]

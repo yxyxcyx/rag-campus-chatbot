@@ -1,17 +1,39 @@
+# Virtual environments
 .venv/
 venv/
 env/
+
+# Environment variables
 .env
+
+# Database
 chroma_db/
+src/chroma_db/
+*.sqlite3
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# IDE
 .vscode/
 .idea/
+
+# OS
 .DS_Store
-data/
-evaluation_results/
+Thumbs.db
+
+# Redis
 dump.rdb
 *.rdb
-.pytest_cache/
+
+# Logs and results
 *.log
-.gitignore
+evaluation_results.json
+
+# Keep data folder but ignore contents
+data/*
+!data/.gitkeep

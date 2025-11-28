@@ -5,21 +5,19 @@ Celery Configuration
 
 This module configures the Celery task queue system for asynchronous
 document ingestion. It uses Redis as the message broker.
+
+Configuration is loaded from the centralized config module.
 """
 
-import os
 from celery import Celery
-from dotenv import load_dotenv
 
-load_dotenv()
+from config import get_settings
 
-# Redis connection configuration
-REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
-REDIS_PORT = os.getenv('REDIS_PORT', '6379')
-REDIS_DB = os.getenv('REDIS_DB', '0')
+# Load validated configuration
+settings = get_settings()
 
-# Construct Redis URL
-REDIS_URL = f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'
+# Redis URL from centralized config
+REDIS_URL = settings.redis_url
 
 # Initialize Celery application
 celery_app = Celery(

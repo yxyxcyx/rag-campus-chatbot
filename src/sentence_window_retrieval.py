@@ -20,11 +20,16 @@ from typing import List, Dict, Tuple
 import nltk
 from nltk.tokenize import sent_tokenize
 
+from logging_config import get_logger
+
+# Module logger
+logger = get_logger(__name__)
+
 # Download required NLTK data (run once)
 try:
     nltk.data.find('tokenizers/punkt')
 except LookupError:
-    print("Downloading NLTK punkt tokenizer...")
+    logger.info("Downloading NLTK punkt tokenizer")
     nltk.download('punkt', quiet=True)
 
 
@@ -194,15 +199,22 @@ def chunk_text_with_sentence_windows(
         for window, meta in zip(windows, metadata_list)
     ]
     
-    print(f" Created {len(central_sentences)} sentence windows")
-    print(f"   - Window size: ±{window_size} sentences")
-    print(f"   - Total sentences to embed: {len(central_sentences)}")
+    logger.info(
+        "Sentence windows created",
+        window_count=len(central_sentences),
+        window_size=window_size
+    )
     
     return central_sentences, formatted_windows
 
 
 # Example usage and comparison
 if __name__ == '__main__':
+    from logging_config import setup_logging
+    
+    # Setup logging for standalone execution
+    setup_logging(level="INFO", json_output=False, app_name="sentence-window")
+    
     # Test the sentence-window retrieval
     test_doc = """
     The university offers a wide range of academic programs. Students can choose from 
@@ -217,14 +229,11 @@ if __name__ == '__main__':
     
     central_sentences, windows, metadata = retriever.create_sentence_windows(documents)
     
-    print("\n" + "="*70)
-    print("SENTENCE-WINDOW RETRIEVAL EXAMPLE")
-    print("="*70)
+    logger.info("Sentence-window retrieval example")
     
     for i, (sentence, window, meta) in enumerate(zip(central_sentences[:3], windows[:3], metadata[:3])):
-        print(f"\n--- Window {i+1} ---")
-        print(f"Central Sentence: {sentence}")
-        print(f"Window Size: {meta['window_end'] - meta['window_start']} sentences")
-        print(f"Full Window: {window[:100]}...")
-    
-    print("\n" + "="*70)
+        logger.info(
+            f"Window {i+1}",
+            central_sentence=sentence[:50],
+            window_size=meta['window_end'] - meta['window_start']
+        )

@@ -4,6 +4,23 @@ This guide provides comprehensive setup instructions for developing the RAG Camp
 
 ---
 
+## Quick Start with Make
+
+All development commands are consolidated in a **Makefile** for consistency across platforms.
+
+```bash
+# See all available commands
+make help
+
+# Quick setup
+make dev          # Create venv and install dependencies
+make up           # Start all Docker services
+make ingest       # Ingest documents from data/
+make test         # Run all tests
+```
+
+---
+
 ## Quick Setup
 
 Choose your preferred development method:
@@ -12,40 +29,31 @@ Choose your preferred development method:
 
 **Prerequisites:**
 - Docker Desktop installed ([Download here](https://www.docker.com/products/docker-desktop))
+- GNU Make (`make --version` to check)
 - `.env` file with `GROQ_API_KEY` configured
 
-**One-command setup (background services):**
+**One-command setup:**
 ```bash
-# Start Redis, ChromaDB, and the Celery worker automatically
-./dev-start.sh
+# 1. Configure environment
+cp .env.example .env
+# Edit .env and add your GROQ_API_KEY
+
+# 2. Start all services
+make up
+
+# 3. Access services
+# Frontend: http://localhost:8501
+# Backend API: http://localhost:8000/docs
 ```
 
-**Development workflow (after background services are running, open 2 terminals):**
+**Development workflow:**
 ```bash
-# Terminal 1 - Backend API
-docker compose -f docker-compose.dev.yml up backend
-
-# Terminal 2 - Frontend UI  
-docker compose -f docker-compose.dev.yml up frontend
+make up-dev       # Start with hot reload
+make logs         # View logs
+make down         # Stop services
+make restart      # Restart all services
+make clean        # Stop and remove volumes
 ```
-
-**Access your services:**
-- Frontend: http://localhost:8501
-- Backend API: http://localhost:8000/docs
-- ChromaDB: http://localhost:8001
-- Background services (Redis, Celery Worker) run automatically
-
-**Stop services:**
-```bash
-./dev-stop.sh
-```
-
-#### Important notes
-
-- `./dev-start.sh` only launches the background services (Redis, ChromaDB, Celery worker). Keep backend/frontend running in their own terminals for hot reload.
-- Do not activate a local Python virtual environment when using Docker for development. All dependencies run inside the containers.
-- On macOS and Linux, use `./dev-start.sh`; on Windows, use `dev-start.bat`.
-- Avoid mixing Docker-based services with the same services started locally in a virtual environment.
 
 ### Option 2: Local Development
 
@@ -65,64 +73,118 @@ brew install redis  # macOS
 
 **Setup:**
 ```bash
-# Install Python dependencies
-pip install -r requirements/dev.txt
+# 1. Setup development environment
+make dev
 
-# Start Redis server
-redis-server
-
-# Set environment variables in .env
+# 2. Configure environment  
 cp .env.example .env
 # Edit .env with your GROQ_API_KEY
+
+# 3. Start Redis server (separate terminal)
+redis-server
 ```
 
 **Run services:**
 ```bash
-# Terminal 1 - Start Celery worker
-cd src && celery -A ingestion_worker worker -l info --pool=solo --concurrency=1
-
-# Terminal 2 - Start FastAPI backend
-cd src && uvicorn main:app --reload --host 0.0.0.0 --port 8000
-
-# Terminal 3 - Start Streamlit frontend
-cd src && streamlit run app.py --server.port 8501 --server.address 0.0.0.0
-
-# Terminal 4 - Ingest documents (optional)
-python scripts/trigger_ingestion.py data/
+make api          # Start FastAPI backend
+make worker       # Start Celery worker
+make ui           # Start Streamlit frontend
 ```
+
+---
+
+## Make Commands Reference
+
+### Setup
+| Command | Description |
+|---------|-------------|
+| `make dev` | Create venv and install all dependencies |
+| `make install` | Install Python dependencies only |
+| `make check-env` | Verify environment configuration |
+
+### Docker
+| Command | Description |
+|---------|-------------|
+| `make up` | Start all services with Docker Compose |
+| `make up-dev` | Start development services (hot reload) |
+| `make down` | Stop all Docker services |
+| `make logs` | Show logs from all services |
+| `make logs-api` | Show API logs only |
+| `make restart` | Restart all services |
+| `make clean` | Stop services and remove volumes |
+
+### Local Development
+| Command | Description |
+|---------|-------------|
+| `make api` | Start API server locally |
+| `make worker` | Start Celery worker locally |
+| `make ui` | Start Streamlit UI locally |
+| `make shell` | Open Python shell with project context |
+
+### Ingestion
+| Command | Description |
+|---------|-------------|
+| `make ingest` | Ingest documents from data/ folder |
+| `make ingest-file FILE=path/to/file.pdf` | Ingest a specific file |
+| `make ingest-stats` | Show database statistics |
+| `make ingest-clear` | Clear all documents from database |
+
+### Testing
+| Command | Description |
+|---------|-------------|
+| `make test` | Run all tests with pytest |
+| `make test-arch` | Run architecture validation tests |
+| `make test-eval` | Run system evaluation (requires API) |
+| `make test-quick` | Quick smoke test |
+
+### Code Quality
+| Command | Description |
+|---------|-------------|
+| `make lint` | Run linters (ruff, flake8) |
+| `make format` | Format code with black and isort |
+| `make typecheck` | Run type checking with mypy |
 
 ---
 
 ## Project Structure
 
-After the refactoring, the project follows a clean structure:
-
 ```
 rag-campus-chatbot/
+├── Makefile                      # Development commands (start here!)
 ├── src/                          # Core application code
-│   ├── main.py                   # FastAPI backend
+│   ├── main.py                   # FastAPI backend + API endpoints
 │   ├── app.py                    # Streamlit frontend
-│   ├── rag_pipeline.py           # RAG pipeline
-│   ├── ingestion_worker.py       # Enhanced Celery worker
+│   ├── config.py                 # Centralized configuration (Pydantic)
+│   ├── logging_config.py         # Structured logging
+│   ├── rag_pipeline.py           # RAG pipeline + hybrid search
+│   ├── ingestion_worker.py       # Celery worker for ingestion
 │   ├── celery_config.py          # Celery configuration
-│   ├── enhanced_document_loader.py
-│   └── sentence_window_retrieval.py
+│   ├── enhanced_document_loader.py  # OCR document loading
+│   └── sentence_window_retrieval.py # Sentence-window chunking
 ├── scripts/                      # Utility scripts
-│   ├── evaluate.py               # RAG evaluation
-│   ├── trigger_ingestion.py      # Document ingestion trigger
+│   ├── direct_ingest.py          # Direct ingestion (no Celery)
+│   ├── trigger_ingestion.py      # Celery-based ingestion
+│   ├── evaluate.py               # RAG evaluation (RAGAs)
+│   ├── check_metrics.py          # Performance gating
 │   ├── check_task_status.py      # Celery task monitoring
-│   └── check_metrics.py          # Performance gating
+│   └── shell/                    # Legacy shell scripts
+├── tests/                        # All test files
+│   ├── test_architecture.py      # Architecture validation
+│   ├── test_system_evaluation.py # System evaluation tests
+│   └── ...
 ├── docs/                         # Documentation
-│   └── DEVELOPMENT.md           # This file
-├── requirements/                 # Split requirements
-│   ├── base.txt                 # Common dependencies
-│   ├── api.txt                  # FastAPI service
-│   ├── worker.txt               # Celery worker
-│   ├── ui.txt                   # Streamlit UI
-│   └── dev.txt                  # Development tools
-├── tests/                       # Unit tests
-├── data/                        # Document storage
-└── Docker files & configs
+│   ├── DEVELOPMENT.md            # This file
+│   └── UI.png                    # Screenshot
+├── requirements/                 # Split dependencies
+│   ├── base.txt                  # Common dependencies
+│   ├── api.txt                   # FastAPI service
+│   ├── worker.txt                # Celery worker
+│   ├── ui.txt                    # Streamlit UI
+│   └── dev.txt                   # Development tools
+├── data/                         # Document storage (gitignored)
+├── docker-compose.yml            # Production Docker config
+├── docker-compose.dev.yml        # Development Docker config
+└── Dockerfile.*                  # Container definitions
 ```
 
 ---
@@ -131,38 +193,36 @@ rag-campus-chatbot/
 
 ### 1. Document Ingestion
 ```bash
-# Using Docker dev environment (after ./dev-start.sh and backend/frontend are running)
-python scripts/trigger_ingestion.py data/
+# Direct ingestion (no Celery required)
+make ingest
 
-# Using local setup (Option 2)
-python scripts/trigger_ingestion.py data/
+# Ingest specific file
+make ingest-file FILE=data/handbook.pdf
+
+# Check database status
+make ingest-stats
 ```
 
-### 2. Testing RAG Pipeline
+### 2. Testing
 ```bash
-# Run evaluation
-python scripts/evaluate.py
+# Run all tests
+make test
 
-# Check performance metrics
-python scripts/check_metrics.py
+# Architecture tests (config, logging, error handling)
+make test-arch
+
+# System evaluation (requires running API)
+make up
+make test-eval
 ```
 
-### 3. Monitoring Tasks
+### 3. Code Quality
 ```bash
-# Check Celery task status
-python scripts/check_task_status.py <task_id>
+# Lint code
+make lint
 
-# View collection statistics
-python scripts/trigger_ingestion.py --stats
-```
-
-### 4. Code Quality
-```bash
-# Run linting
-flake8 src/ scripts/ tests/
-
-# Run tests
-pytest tests/
+# Format code
+make format
 ```
 
 ---

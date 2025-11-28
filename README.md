@@ -2,89 +2,87 @@
 
 A Retrieval-Augmented Generation (RAG) system for campus information queries, implementing state-of-the-art sentence-window retrieval for improved accuracy and context quality.
 
-![UI Screenshot](UI.png)
+![UI Screenshot](docs/UI.png)
 
-# Features
+## Features
 
 ### Advanced RAG Pipeline
-- **Sentence-Window Retrieval**: Implemented in `sentence_window_retrieval.py` and used by the ingestion worker to create sentence windows for precise retrieval.
-- **Hybrid Search Components**: BM25 keyword search, vector similarity, and cross-encoder reranking utilities implemented in `rag_pipeline.py` for advanced retrieval workflows.
-- **Enhanced OCR**: Advanced document processing via `EnhancedDocumentLoader` with OCR support for image-based PDFs.
-- **Semantic Caching**: Semantic cache implementation for query result caching with similarity-based retrieval.
-- **Query Optimization**: Query preprocessing and expansion utilities to improve retrieval quality.
+- **Sentence-Window Retrieval**: Precise retrieval with context-aware windows
+- **Hybrid Search**: BM25 keyword + vector similarity + cross-encoder reranking
+- **Enhanced OCR**: Advanced document processing for image-based PDFs
+- **Semantic Caching**: Query result caching with similarity-based retrieval
+- **Centralized Configuration**: Pydantic-validated settings with fail-fast startup
+- **Structured Logging**: JSON logging with request ID tracing
 
 ### Architecture
-- **Microservices**: Decoupled FastAPI backend, Streamlit frontend, Celery workers, Redis, and ChromaDB services.
-- **Async Processing**: Background document ingestion with Redis-backed Celery task queue.
-- **Optimized Dependencies**: Component-specific requirements files for smaller, faster builds.
-- **Docker Ready**: Full containerization with separate development and production Docker Compose configurations.
+- **Microservices**: FastAPI backend, Streamlit frontend, Celery workers, Redis, ChromaDB
+- **Async Processing**: Background document ingestion with Redis-backed task queue
+- **Optimized Dependencies**: Component-specific requirements for smaller builds
+- **Docker Ready**: Full containerization with dev/prod configurations
 
 ### Quality & Monitoring  
-- **RAGAs Evaluation**: Evaluation pipeline in `scripts/evaluate.py` using faithfulness, relevancy, recall, and precision metrics.
-- **Performance Gates**: Quality thresholds enforced by `scripts/check_metrics.py`, designed for CI/CD integration.
-- **Health Checks**: Container health checks and automatic restarts configured in Docker Compose.
-- **Logging**: Logging in the API and worker services for debugging and basic monitoring.
+- **RAGAs Evaluation**: Faithfulness, relevancy, recall, and precision metrics
+- **Performance Gates**: Quality thresholds for CI/CD integration
+- **Error Handling**: Granular HTTP status codes (503 for LLM issues, 500 for DB errors)
+- **Health Checks**: Container health monitoring with automatic restarts
 
 ---
 
 ## Quick Start
 
+All commands are available via **Make** for consistency across platforms:
+
+```bash
+make help         # See all available commands
+```
+
 ### Docker (Recommended)
+
 ```bash
 # 1. Configure environment
 cp .env.example .env
 # Edit .env and add your GROQ_API_KEY
 
-# 2. Start background services (Redis, ChromaDB, Celery worker)
-./dev-start.sh
+# 2. Start all services
+make up
 
-# 3. Start backend and frontend (run in two separate terminals)
-docker compose -f docker-compose.dev.yml up backend
-docker compose -f docker-compose.dev.yml up frontend
+# 3. Ingest documents
+make ingest
 
 # 4. Access services
 # Frontend: http://localhost:8501
-# Backend: http://localhost:8000/docs
+# Backend API: http://localhost:8000/docs
 ```
 
 ### Local Development
+
 ```bash
-# 1. (Recommended) Create and activate a virtual environment
-python -m venv venv
-source venv/bin/activate
+# 1. Setup development environment
+make dev
 
-# 2. Install dependencies
-pip install -r requirements/dev.txt
-
-# 3. Configure environment  
+# 2. Configure environment  
 cp .env.example .env
 # Edit .env and add your GROQ_API_KEY
 
-# 4. Start services (see docs/DEVELOPMENT.md for details)
-```
-
-** For detailed setup instructions, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)**
-
-### Running Locally
-
-```bash
-# Terminal 1: Start Redis
+# 3. Start Redis (separate terminal)
 redis-server
 
-# Terminal 2: Start Celery Worker
-source venv/bin/activate
-cd src
-celery -A ingestion_worker worker -l info --pool=solo --concurrency=1
+# 4. Start services
+make api          # Terminal 1: API server
+make worker       # Terminal 2: Celery worker
+make ui           # Terminal 3: Streamlit UI
+```
 
-# Terminal 3: Start API Server
-source venv/bin/activate
-cd src
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+### Common Commands
 
-# Terminal 4: Start UI (optional)
-source venv/bin/activate
-cd src
-streamlit run app.py
+```bash
+make up           # Start Docker services
+make down         # Stop Docker services
+make ingest       # Ingest documents from data/
+make test         # Run all tests
+make test-arch    # Run architecture tests
+make lint         # Run linters
+make logs         # View Docker logs
 ```
 
 ### Add Documents
@@ -93,15 +91,22 @@ streamlit run app.py
 # Add your documents to the data/ folder
 cp your_documents.pdf data/
 
-# Trigger ingestion
-python scripts/trigger_ingestion.py data/
+# Ingest documents
+make ingest
+
+# Or ingest specific file
+make ingest-file FILE=data/handbook.pdf
 ```
+
+**For detailed setup instructions, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)**
 
 ### Access Applications
 
-- **UI**: http://localhost:8501
-- **API**: http://localhost:8000/docs
-- **Health Check**: http://localhost:8000/
+| Service | URL |
+|---------|-----|
+| Frontend UI | http://localhost:8501 |
+| Backend API | http://localhost:8000/docs |
+| Health Check | http://localhost:8000/ |
 
 ---
 
@@ -139,7 +144,7 @@ python scripts/trigger_ingestion.py data/
 6. **ChromaDB**: Vector database for embeddings
 7. **Redis**: Message broker for Celery tasks
 
-**Note**: The FastAPI server is read-only and serves the `/ask` endpoint. Document ingestion is handled by Celery workers triggered via `scripts/trigger_ingestion.py` or `docker-trigger-ingestion.sh` and writes directly to ChromaDB.
+**Note**: The FastAPI server is read-only and serves the `/ask` endpoint. Document ingestion is handled via `make ingest` (or `scripts/trigger_ingestion.py` for Celery-based ingestion) and writes directly to ChromaDB.
 
 ---
 
@@ -147,46 +152,49 @@ python scripts/trigger_ingestion.py data/
 
 ```
 rag-campus-chatbot/
+├── Makefile                      # Development commands (start here)
 ├── src/                          # Core application code
-│   ├── main.py                   # FastAPI server
-│   ├── ingestion_worker.py       # Celery worker for ingestion
-│   ├── rag_pipeline.py           # Core RAG pipeline with retrieval
-│   ├── sentence_window_retrieval.py # Sentence-window chunking
+│   ├── main.py                   # FastAPI server + API endpoints
 │   ├── app.py                    # Streamlit UI
+│   ├── config.py                 # Centralized configuration (Pydantic)
+│   ├── logging_config.py         # Structured logging with JSON output
+│   ├── rag_pipeline.py           # RAG pipeline + hybrid search
+│   ├── ingestion_worker.py       # Celery worker for ingestion
 │   ├── celery_config.py          # Celery configuration
-│   └── enhanced_document_loader.py # Enhanced OCR document loader
+│   ├── sentence_window_retrieval.py  # Sentence-window chunking
+│   └── enhanced_document_loader.py   # OCR document loader
 ├── scripts/                      # Utility scripts
 │   ├── evaluate.py               # RAGAs evaluation
-│   ├── trigger_ingestion.py      # Manual ingestion script
+│   ├── direct_ingest.py          # Direct ingestion (no Celery)
+│   ├── trigger_ingestion.py      # Celery-based ingestion
 │   ├── check_task_status.py      # Task monitoring
 │   ├── check_metrics.py          # Performance gating
-│   └── test_setup.py             # Environment verification
-├── docs/                         # Documentation
-│   └── DEVELOPMENT.md           # Development guide
-├── requirements/                 # Split requirements
-│   ├── base.txt                 # Common dependencies
-│   ├── api.txt                  # FastAPI service
-│   ├── worker.txt               # Celery worker
-│   ├── ui.txt                   # Streamlit UI
-│   └── dev.txt                  # Development tools
+│   └── shell/                    # Legacy shell scripts
 ├── tests/                        # Test suite
-├── data/                         # Document storage
-├── requirements.txt              # Legacy requirements (for compatibility)
+│   ├── test_architecture.py      # Architecture validation tests
+│   ├── test_system_evaluation.py # System evaluation tests
+│   ├── eval_dataset.json         # Evaluation dataset
+│   └── ...
+├── docs/                         # Documentation
+│   ├── DEVELOPMENT.md            # Development guide
+│   └── UI.png                    # UI screenshot
+├── requirements/                 # Split requirements
+│   ├── base.txt                  # Common dependencies
+│   ├── api.txt                   # FastAPI service
+│   ├── worker.txt                # Celery worker
+│   ├── ui.txt                    # Streamlit UI
+│   └── dev.txt                   # Development tools
+├── data/                         # Document storage (gitignored)
 ├── .env.example                  # Environment variables template
-├── docker-compose.yml            # Docker orchestration
-├── docker-compose.dev.yml        # Development Docker setup
+├── .gitignore                    # Git ignore rules
+├── docker-compose.yml            # Production Docker config
+├── docker-compose.dev.yml        # Development Docker config
 ├── Dockerfile.api                # API container
 ├── Dockerfile.worker             # Worker container
 ├── Dockerfile.ui                 # UI container
-├── Dockerfile.backend.dev        # Development backend container
-├── Dockerfile.frontend.dev       # Development frontend container
-├── Dockerfile.worker.dev         # Development worker container
-├── dev-start.sh                  # Development startup script
-├── dev-stop.sh                   # Development stop script
-├── start_worker.sh               # Helper to start worker
-├── docker-trigger-ingestion.sh   # Docker ingestion script
-├── eval_dataset.json             # Evaluation dataset
-├── UI.png                        # UI screenshot
+├── Dockerfile.backend.dev        # Development backend
+├── Dockerfile.frontend.dev       # Development frontend
+├── Dockerfile.worker.dev         # Development worker
 └── README.md                     # This file
 ```
 
@@ -259,16 +267,19 @@ python scripts/check_metrics.py
 
 ```bash
 # Build and start all services
-docker compose up -d
+make up
+# or: docker compose up -d
 
 # Check logs
-docker compose logs -f
+make logs
+# or: docker compose logs -f
 
 # Ingest documents
-./docker-trigger-ingestion.sh data/
+make ingest
 
 # Stop services
-docker compose down
+make down
+# or: docker compose down
 ```
 
 Services (from `docker-compose.yml`):
@@ -398,7 +409,7 @@ Model configuration is split between the FastAPI API (`src/main.py`) and the RAG
 **Solution**: Start Redis server with `redis-server`
 
 ### "Database is empty" warning
-**Solution**: Run `python scripts/trigger_ingestion.py data/` to ingest documents
+**Solution**: Run `make ingest` to ingest documents from data/ folder
 
 ### API returns 500 error
 **Solution**: Check that Groq API key is set correctly in `.env`
@@ -432,17 +443,23 @@ Model configuration is split between the FastAPI API (`src/main.py`) and the RAG
 
 ## Evaluation & Quality
 
-- Latest evaluation run (November 2025) on `eval_dataset.json` passed all four RAGAS quality gates (faithfulness, answer relevancy, context recall, context precision).
-- Latest metrics summary:
+Run evaluation with:
+```bash
+make test-eval      # Requires running API
+# or directly:
+python scripts/evaluate.py
+python scripts/check_metrics.py
+```
 
+Latest metrics (November 2025):
 ```
-context_precision   : 0.9000 (threshold: 0.70)  PASS
-context_recall      : 0.9111 (threshold: 0.70)  PASS
-faithfulness        : 0.8667 (threshold: 0.70)  PASS
-answer_relevancy    : 0.7173 (threshold: 0.70)  PASS
+context_precision   : 0.8389 (threshold: 0.70)  PASS
+context_recall      : 0.6833 (threshold: 0.70)  FAIL
+faithfulness        : 0.7556 (threshold: 0.70)  PASS
+answer_relevancy    : 0.6041 (threshold: 0.70)  FAIL
 ```
-- Metrics are generated via `python scripts/evaluate.py` and enforced with `python scripts/check_metrics.py`, which compares results against the thresholds codified in `scripts/check_metrics.py`.
-- CSV outputs remain under `evaluation_results/` for traceability; rerun the evaluation anytime after changing documents, prompts, or model settings.
+
+Note: Metrics vary based on ingested documents and evaluation dataset. Results are saved to `evaluation_results/` for traceability.
 
 ---
 
