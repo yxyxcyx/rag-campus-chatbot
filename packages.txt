@@ -1,5 +1,1 @@
-# System packages for Streamlit Community Cloud
-# These are installed via apt-get before Python packages
-
-# Build tools (needed for some Python packages)
 build-essential
