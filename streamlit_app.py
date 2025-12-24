@@ -359,7 +359,7 @@ def main():
         st.session_state.messages = []
     
     # Header
-    st.title("🎓 XMUM AI Campus Chatbot")
+    st.title("XMUM AI Campus Chatbot")
     st.markdown("""
     Welcome! I'm an AI assistant trained on XMUM documents.
     Ask me about campus rules, academic policies, fees, or procedures.
@@ -367,18 +367,18 @@ def main():
     
     # Sidebar
     with st.sidebar:
-        st.header("⚙️ Settings")
+        st.header("Settings")
         
         # Show database stats
         try:
             doc_count = collection.count()
-            st.success(f"📚 {doc_count} documents loaded")
+            st.success(f"{doc_count} documents loaded")
         except:
             st.warning("Could not get document count")
         
         st.markdown("---")
         
-        if st.button("🗑️ Clear Conversation"):
+        if st.button("Clear Conversation"):
             st.session_state.messages = []
             st.session_state.session_id = str(uuid.uuid4())
             st.rerun()
@@ -386,17 +386,7 @@ def main():
         st.markdown("---")
         st.caption(f"Session: {st.session_state.session_id[:8]}...")
         
-        # Feature info
-        st.markdown("---")
-        st.markdown("### 🔧 Features")
-        st.markdown("""
-        - ✅ Hybrid Search (BM25 + Vector)
-        - ✅ Cross-Encoder Reranking
-        - ✅ Confidence Scoring
-        - ✅ Conversation Memory
-        - ✅ Source Citations
-        """)
-    
+            
     st.markdown("---")
     
     # Display chat history
@@ -406,7 +396,7 @@ def main():
             if message["role"] == "assistant" and "metadata" in message:
                 meta = message["metadata"]
                 if meta.get("sources"):
-                    with st.expander("📚 Sources"):
+                    with st.expander("Sources"):
                         for source in meta["sources"]:
                             st.caption(f"• {source}")
                 if meta.get("confidence"):
@@ -458,7 +448,7 @@ def main():
                 }
                 
                 if sources:
-                    with st.expander("📚 Sources"):
+                    with st.expander("Sources"):
                         for source in sources:
                             st.caption(f"• {source}")
                 
