@@ -8,11 +8,20 @@ A Retrieval-Augmented Generation (RAG) system for campus information queries, im
 
 ### Advanced RAG Pipeline
 - **Sentence-Window Retrieval**: Precise retrieval with context-aware windows
-- **Hybrid Search**: BM25 keyword + vector similarity + cross-encoder reranking
+- **Hybrid Search**: BM25 + vector similarity with Reciprocal Rank Fusion (RRF) + cross-encoder reranking
 - **Enhanced OCR**: Advanced document processing for image-based PDFs
+- **Table-Aware Extraction**: Preserves fee structures and tabular data relationships
 - **Semantic Caching**: Query result caching with similarity-based retrieval
 - **Centralized Configuration**: Pydantic-validated settings with fail-fast startup
 - **Structured Logging**: JSON logging with request ID tracing
+
+### Enhanced User Experience (NEW)
+- **Conversation Memory**: Session-based context for follow-up questions
+- **Multi-Part Question Handling**: Detects and addresses "What are fees AND deadlines?" queries
+- **Ambiguous Query Detection**: Prompts for clarification when needed
+- **Citation Verification**: Filters and validates retrieved chunks
+- **Confidence Scoring**: Shows response reliability to users
+- **Improved Prompts**: Context-aware prompting with system messages
 
 ### Architecture
 - **Microservices**: FastAPI backend, Streamlit frontend, Celery workers, Redis, ChromaDB
@@ -139,12 +148,14 @@ make ingest-file FILE=data/handbook.pdf
 1. **API Server (`main.py`)**: Stateless FastAPI server handling queries
 2. **Celery Worker (`ingestion_worker.py`)**: Async document processing
 3. **RAG Pipeline (`rag_pipeline.py`)**: Core retrieval and generation logic
-4. **Sentence-Window Retrieval (`sentence_window_retrieval.py`)**: Chunking
-5. **Streamlit UI (`app.py`)**: User interface
-6. **ChromaDB**: Vector database for embeddings
-7. **Redis**: Message broker for Celery tasks
+4. **Enhanced RAG Engine (`enhanced_rag_engine.py`)**: Query analysis, conversation memory, citation verification
+5. **Table-Aware Loader (`table_aware_loader.py`)**: Specialized PDF table extraction
+6. **Sentence-Window Retrieval (`sentence_window_retrieval.py`)**: Chunking
+7. **Streamlit UI (`app.py`)**: User interface with session support
+8. **ChromaDB**: Vector database for embeddings
+9. **Redis**: Message broker for Celery tasks
 
-**Note**: The FastAPI server is read-only and serves the `/ask` endpoint. Document ingestion is handled via `make ingest` (or `scripts/trigger_ingestion.py` for Celery-based ingestion) and writes directly to ChromaDB.
+**Note**: The FastAPI server serves both `/ask` (basic) and `/ask/enhanced` (with conversation memory) endpoints. Document ingestion is handled via `make ingest` which auto-detects tables in PDFs.
 
 ---
 
@@ -155,21 +166,25 @@ rag-campus-chatbot/
 ├── Makefile                      # Development commands (start here)
 ├── src/                          # Core application code
 │   ├── main.py                   # FastAPI server + API endpoints
-│   ├── app.py                    # Streamlit UI
+│   ├── app.py                    # Streamlit UI with session support
 │   ├── config.py                 # Centralized configuration (Pydantic)
 │   ├── logging_config.py         # Structured logging with JSON output
 │   ├── rag_pipeline.py           # RAG pipeline + hybrid search
+│   ├── enhanced_rag_engine.py    # Query analysis, conversation memory, citations
 │   ├── ingestion_worker.py       # Celery worker for ingestion
 │   ├── celery_config.py          # Celery configuration
 │   ├── sentence_window_retrieval.py  # Sentence-window chunking
-│   └── enhanced_document_loader.py   # OCR document loader
+│   ├── enhanced_document_loader.py   # OCR document loader
+│   └── table_aware_loader.py     # Table extraction for PDFs
 ├── scripts/                      # Utility scripts
+│   ├── smart_ingest.py           # Smart ingestion with auto table detection
+│   ├── direct_ingest.py          # Basic ingestion (no table detection)
 │   ├── evaluate.py               # RAGAs evaluation
-│   ├── direct_ingest.py          # Direct ingestion (no Celery)
 │   ├── trigger_ingestion.py      # Celery-based ingestion
+│   ├── test_enhanced_features.py # Test enhanced RAG features
 │   ├── check_task_status.py      # Task monitoring
 │   ├── check_metrics.py          # Performance gating
-│   └── shell/                    # Legacy shell scripts
+│   └── shell/                    # Shell scripts
 ├── tests/                        # Test suite
 │   ├── test_architecture.py      # Architecture validation tests
 │   ├── test_system_evaluation.py # System evaluation tests
@@ -196,6 +211,78 @@ rag-campus-chatbot/
 ├── Dockerfile.frontend.dev       # Development frontend
 ├── Dockerfile.worker.dev         # Development worker
 └── README.md                     # This file
+```
+
+---
+
+## Document Ingestion
+
+### How Ingestion Works
+
+Documents are **NOT automatically ingested** when you start the system. You must manually trigger ingestion after:
+1. First-time setup
+2. Adding new documents to the `data/` folder
+3. Updating existing documents
+
+### Ingestion Methods
+
+| Command | Description | Use Case |
+|---------|-------------|----------|
+| `make ingest` | Smart ingestion (auto-detects tables) | All documents including PDFs with tables |
+| `make ingest-basic` | Basic ingestion without table detection | Faster, for simple text documents |
+| `make ingest-celery` | Async via Celery worker | Production/Docker environment |
+
+### Recommended Workflow
+
+```bash
+# 1. Add documents to data/ folder
+cp your_documents.pdf data/
+
+# 2. Run smart ingestion (auto-detects tables)
+make ingest
+
+# 3. Verify ingestion
+make ingest-stats
+```
+
+### Incremental Updates
+
+The system supports document versioning. When you re-run ingestion:
+- Only changed/new files are processed (with `--use-versioning`)
+- Deleted files are tracked
+- Use `make ingest-clear` to start fresh
+
+---
+
+## API Endpoints
+
+### Query Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/ask` | POST | Basic question answering |
+| `/ask/enhanced` | POST | Enhanced with conversation memory, multi-part handling |
+| `/analyze` | POST | Analyze query without generating response |
+
+### Session Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/session/{id}` | GET | Get session info (history, topics, entities) |
+| `/session/{id}` | DELETE | Clear session history |
+
+### Example: Enhanced Query with Session
+
+```bash
+# First question
+curl -X POST http://localhost:8000/ask/enhanced \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is the tuition fee for Data Science?", "session_id": "my-session"}'
+
+# Follow-up question (uses conversation context)
+curl -X POST http://localhost:8000/ask/enhanced \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What about for international students?", "session_id": "my-session"}'
 ```
 
 ---
@@ -390,13 +477,22 @@ API_BASE_URL=http://127.0.0.1:8000
 
 ### Model Configuration
 
-Model configuration is split between the FastAPI API (`src/main.py`) and the RAG pipeline (`src/rag_pipeline.py`):
+All models are configured in `src/config.py` via environment variables or defaults:
 
-- In `src/main.py`, update the embedding model:
-  - `embedding_model = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")`
-- In `src/main.py`, update the cross-encoder:
-  - `cross_encoder = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")`
-- In `src/rag_pipeline.py`, update the LLM used in `generate_response` by changing the `model="llama-3.1-8b-instant"` argument passed to `client.chat.completions.create(...)`.
+| Component | Model | Dimension |
+|-----------|-------|----------|
+| **Embedding** | `sentence-transformers/all-mpnet-base-v2` | 768 |
+| **Cross-Encoder** | `cross-encoder/ms-marco-MiniLM-L-6-v2` | - |
+| **LLM** | Groq `llama-3.1-8b-instant` | - |
+
+To change models, update `src/config.py` or set environment variables:
+```bash
+EMBEDDING_MODEL_NAME=sentence-transformers/all-mpnet-base-v2
+CROSS_ENCODER_MODEL_NAME=cross-encoder/ms-marco-MiniLM-L-6-v2
+LLM_MODEL_NAME=llama-3.1-8b-instant
+```
+
+**Note**: Changing the embedding model requires re-ingesting all documents (`make ingest-clear`).
 
 ---
 
@@ -451,15 +547,15 @@ python scripts/evaluate.py
 python scripts/check_metrics.py
 ```
 
-Latest metrics (November 2025):
+Example metrics output:
 ```
-context_precision   : 0.8389 (threshold: 0.70)  PASS
-context_recall      : 0.6833 (threshold: 0.70)  FAIL
-faithfulness        : 0.7556 (threshold: 0.70)  PASS
-answer_relevancy    : 0.6041 (threshold: 0.70)  FAIL
+context_precision   : 0.XX (threshold: 0.70)
+context_recall      : 0.XX (threshold: 0.70)
+faithfulness        : 0.XX (threshold: 0.70)
+answer_relevancy    : 0.XX (threshold: 0.70)
 ```
 
-Note: Metrics vary based on ingested documents and evaluation dataset. Results are saved to `evaluation_results/` for traceability.
+**Note**: Metrics vary based on ingested documents and evaluation dataset. Run `make test-eval` to generate current metrics. Results are saved to `evaluation_results/` for traceability.
 
 ---
 
@@ -498,12 +594,13 @@ Current limitations:
 ## Future Improvements
 
 - [ ] Add support for more document formats (PPT, HTML)
-- [ ] Implement caching layer for frequent queries
-- [ ] Add user authentication and session management
+- [x] ~~Implement caching layer for frequent queries~~ (Semantic caching implemented)
+- [x] ~~Add user authentication and session management~~ (Session-based conversation memory implemented)
 - [ ] Implement query history and analytics
 - [ ] Add support for multiple collections
-- [ ] Implement incremental updates for modified documents
+- [x] ~~Implement incremental updates for modified documents~~ (Document versioning implemented)
 - [ ] Add GPU support for faster embedding generation
+- [ ] Full multi-modal image understanding (requires vision LLM)
 
 ---
 

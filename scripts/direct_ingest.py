@@ -53,10 +53,10 @@ def main():
         print(f"Documents: {count}")
         return
     
-    # Initialize embedding model
-    logger.info("Loading embedding model", model="all-MiniLM-L6-v2")
+    # Initialize embedding model (use model from config)
+    logger.info("Loading embedding model", model=settings.embedding_model_name)
     embedding_model = HuggingFaceEmbeddings(
-        model_name="all-MiniLM-L6-v2",
+        model_name=settings.embedding_model_name,
         model_kwargs={'device': 'cpu'},
         encode_kwargs={'normalize_embeddings': True}
     )

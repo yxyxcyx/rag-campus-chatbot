@@ -6,10 +6,10 @@ env/
 # Environment variables
 .env
 
-# Database
-chroma_db/
+# Database (commented out for Streamlit Cloud deployment - using Git LFS)
+# chroma_db/
 src/chroma_db/
-*.sqlite3
+# *.sqlite3
 
 # Python
 __pycache__/
@@ -37,3 +37,6 @@ evaluation_results.json
 # Keep data folder but ignore contents
 data/*
 !data/.gitkeep
+
+docs/DEPLOYMENT.md
+docs/STREAMLIT_CLOUD_DEPLOYMENT.md

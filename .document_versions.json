@@ -1,0 +1,35 @@
+{
+  "documents": {
+    "data/.gitkeep": {
+      "hash": "d41d8cd98f00b204e9800998ecf8427e",
+      "updated_at": "2025-12-24T22:23:53.067416",
+      "metadata": {}
+    },
+    "data/XMUM General Booklet.pdf": {
+      "hash": "ce7ce390b760a96a8e0e96c1699b36b6",
+      "updated_at": "2025-12-24T22:23:53.105975",
+      "metadata": {}
+    },
+    "data/International Tuition Fees 2026_0.pdf": {
+      "hash": "04363bdc2f38eb3d81a6baf6fc2e9b66",
+      "updated_at": "2025-12-24T22:23:53.107981",
+      "metadata": {}
+    },
+    "data/Local Tuition Fees 2026.pdf": {
+      "hash": "9db0e326b4ff5715d0d717a29e38cf02",
+      "updated_at": "2025-12-24T22:23:53.108689",
+      "metadata": {}
+    },
+    "data/degree_handbook.pdf": {
+      "hash": "fb4c4cdcf23a9c56ac2cacc9b3a02d9c",
+      "updated_at": "2025-12-24T22:23:53.182448",
+      "metadata": {}
+    },
+    "data/Local Scholarship and Study Grant 2026.pdf": {
+      "hash": "6b13da4a2b76010166bde978f8be0c6c",
+      "updated_at": "2025-12-24T22:23:53.183241",
+      "metadata": {}
+    }
+  },
+  "last_update": "2025-12-24T22:23:53.183244"
+}

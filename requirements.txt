@@ -1,0 +1,29 @@
+# Requirements for Streamlit Community Cloud deployment
+# This file is specifically for Streamlit Cloud - do not use for local development
+
+# Streamlit
+streamlit>=1.28.0
+
+# LLM
+groq>=0.4.0
+
+# ML and embeddings
+sentence-transformers>=2.2.0
+transformers>=4.35.0
+torch>=2.0.0
+numpy>=1.24.0
+scikit-learn>=1.3.0
+
+# Vector database
+chromadb>=0.4.0
+
+# Search
+rank-bm25>=0.2.2
+
+# Text processing
+nltk>=3.8.0
+
+# Configuration
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0

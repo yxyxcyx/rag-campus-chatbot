@@ -86,8 +86,8 @@ class Settings(BaseSettings):
     
     # === Model Settings ===
     embedding_model_name: str = Field(
-        default="all-MiniLM-L6-v2",
-        description="HuggingFace embedding model name"
+        default="sentence-transformers/all-mpnet-base-v2",
+        description="HuggingFace embedding model name. Options: all-MiniLM-L6-v2 (fast, 22M params), all-mpnet-base-v2 (better quality, 110M params)"
     )
     cross_encoder_model_name: str = Field(
         default="cross-encoder/ms-marco-MiniLM-L-6-v2",

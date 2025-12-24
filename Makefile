@@ -113,11 +113,11 @@ clean: ## Stop services and remove volumes
 
 api: ## Start API server locally (requires Redis)
 	@echo "$(GREEN)Starting API server...$(RESET)"
-	cd src && $(PYTHON) -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+	$(PYTHON) -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload --app-dir src
 
 worker: ## Start Celery worker locally (requires Redis)
 	@echo "$(GREEN)Starting Celery worker...$(RESET)"
-	cd src && celery -A celery_config worker --loglevel=info
+	$(PYTHON) -m celery -A celery_config worker --loglevel=info --workdir src
 
 ui: ## Start Streamlit UI locally
 	@echo "$(GREEN)Starting Streamlit UI...$(RESET)"
@@ -130,8 +130,13 @@ shell: ## Open Python shell with project context
 # INGESTION
 # =============================================================================
 
-ingest: ## Ingest documents from data/ folder (direct, no Celery)
-	@echo "$(GREEN)Ingesting documents...$(RESET)"
+ingest: ## Smart ingest - auto-detects tables and regular text
+	@echo "$(GREEN)Running smart ingestion (auto-detects tables)...$(RESET)"
+	$(PYTHON) scripts/smart_ingest.py data/
+	@echo "$(GREEN)Ingestion complete!$(RESET)"
+
+ingest-basic: ## Basic ingestion without table detection (faster)
+	@echo "$(GREEN)Ingesting documents (basic mode)...$(RESET)"
 	$(PYTHON) scripts/direct_ingest.py data/
 	@echo "$(GREEN)Ingestion complete!$(RESET)"
 
@@ -143,12 +148,13 @@ ingest-celery: ## Trigger ingestion via Celery (requires worker running)
 	@echo "$(GREEN)Triggering Celery ingestion...$(RESET)"
 	$(PYTHON) scripts/trigger_ingestion.py data/
 
-ingest-clear: ## Clear all documents from database
-	@echo "$(YELLOW)Clearing database...$(RESET)"
-	$(PYTHON) scripts/trigger_ingestion.py --clear
+ingest-clear: ## Clear database and re-ingest with smart detection
+	@echo "$(YELLOW)Clearing database and re-ingesting...$(RESET)"
+	$(PYTHON) scripts/smart_ingest.py data/ --clear
+	@echo "$(GREEN)Re-ingestion complete!$(RESET)"
 
 ingest-stats: ## Show database statistics
-	$(PYTHON) scripts/direct_ingest.py --stats
+	$(PYTHON) scripts/smart_ingest.py --stats
 
 # =============================================================================
 # TESTING
@@ -170,6 +176,14 @@ test-quick: ## Quick smoke test
 	@echo "$(GREEN)Running quick tests...$(RESET)"
 	$(PYTHON) -c "import sys; sys.path.insert(0, 'src'); from config import get_settings; from logging_config import get_logger; print('✓ Imports OK')"
 	curl -s http://localhost:8000/ | grep -q "online" && echo "✓ API OK" || echo "✗ API not running"
+
+test-enhanced: ## Test enhanced RAG features (requires running API)
+	@echo "$(GREEN)Testing enhanced features...$(RESET)"
+	$(PYTHON) scripts/test_enhanced_features.py
+
+test-api: ## Quick API health check
+	@echo "$(GREEN)Testing API...$(RESET)"
+	@curl -s http://localhost:8000/ | grep -q "online" && echo "✓ API is running" || echo "✗ API not running"
 
 # =============================================================================
 # CODE QUALITY

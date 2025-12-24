@@ -57,6 +57,7 @@ services:
       - COLLECTION_NAME=collection
     volumes:
       - ./data:/app/data:ro
+      - ./scripts:/app/scripts:ro
       - chroma_data:/app/chroma_db
     depends_on:
       redis:

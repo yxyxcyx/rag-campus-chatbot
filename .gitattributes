@@ -1,0 +1,7 @@
+# Git LFS tracking for large files
+# Used for Streamlit Cloud deployment with pre-built vector database
+
+# Track ChromaDB files with Git LFS
+chroma_db/** filter=lfs diff=lfs merge=lfs -text
+chroma_db/*.sqlite3 filter=lfs diff=lfs merge=lfs -text
+*.sqlite3 filter=lfs diff=lfs merge=lfs -text

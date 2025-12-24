@@ -20,6 +20,8 @@ import chromadb
 from config import get_settings
 from celery_config import celery_app
 from enhanced_document_loader import EnhancedDocumentLoader
+from table_aware_loader import TableAwareLoader
+from enhanced_rag_engine import DocumentVersionManager
 
 # Load validated configuration
 settings = get_settings()
@@ -28,6 +30,12 @@ def load_documents_from_folder(folder_path: str):
     """Wrapper for enhanced document loader"""
     loader = EnhancedDocumentLoader(dpi=2.0, parallel_workers=4)
     return loader.load_folder(folder_path)
+
+
+def load_documents_with_tables(folder_path: str):
+    """Load documents with table-aware extraction for better fee/structured data handling"""
+    loader = TableAwareLoader(dpi=2.0)
+    return loader.load_folder_with_tables(folder_path)
 from rag_pipeline import chunk_text, embed_chunks
 
 # Task logger (Celery provides its own structured logger)
@@ -193,6 +201,239 @@ def get_collection_stats() -> Dict[str, any]:
         }
     except Exception as e:
         logger.error(f"Error getting collection stats: {str(e)}", exc_info=True)
+        return {
+            'status': 'error',
+            'message': str(e)
+        }
+
+
+@celery_app.task(bind=True, base=CallbackTask, name='ingestion_worker.process_with_tables')
+def process_with_tables(self, file_path: str, window_size: int = 3, use_versioning: bool = True) -> Dict[str, any]:
+    """
+    Process documents with TABLE-AWARE extraction for structured data like fee tables.
+    
+    This task combines:
+    1. Table-aware PDF extraction (preserves fee structure relationships)
+    2. Standard sentence-window chunking for regular text
+    3. Optional document versioning for incremental updates
+    
+    Args:
+        file_path: Path to document or folder
+        window_size: Number of sentences before/after central sentence
+        use_versioning: Whether to use document versioning (only ingest changed files)
+        
+    Returns:
+        Dictionary with processing results
+    """
+    logger.info(f"Starting TABLE-AWARE ingestion for: {file_path}")
+    
+    try:
+        version_manager = DocumentVersionManager() if use_versioning else None
+        
+        # Step 1: Check for changes if versioning is enabled
+        files_to_process = None
+        if use_versioning and os.path.isdir(file_path):
+            changes = version_manager.get_changed_documents(file_path)
+            if not changes:
+                logger.info("No document changes detected, skipping ingestion")
+                return {
+                    'status': 'success',
+                    'message': 'No changes detected - database is up to date',
+                    'windows_added': 0,
+                    'documents_processed': 0
+                }
+            files_to_process = [f for f, change_type in changes.items() if change_type != 'deleted']
+            logger.info(f"Found {len(changes)} changed documents: {changes}")
+        
+        # Step 2: Load documents with TABLE-AWARE extraction
+        logger.info("Loading documents with table-aware extraction...")
+        
+        if os.path.isdir(file_path):
+            documents_dict, table_chunks = load_documents_with_tables(file_path)
+        elif os.path.isfile(file_path):
+            loader = TableAwareLoader(dpi=2.0)
+            text, table_chunks = loader.load_pdf_with_tables(file_path)
+            documents_dict = {os.path.basename(file_path): text}
+        else:
+            raise ValueError(f"Invalid path: {file_path}")
+        
+        if not documents_dict and not table_chunks:
+            logger.warning("No documents found or extracted")
+            return {
+                'status': 'warning',
+                'message': 'No documents found or extracted',
+                'windows_added': 0
+            }
+        
+        logger.info(f"Loaded {len(documents_dict)} documents with {len(table_chunks)} table chunks")
+        
+        # Step 3: Create sentence windows from regular text
+        logger.info("Creating sentence windows from text content...")
+        central_sentences, windows = chunk_text(documents_dict, window_size=window_size)
+        logger.info(f"Created {len(windows)} sentence windows")
+        
+        # Step 4: Add table chunks (these are already structured for retrieval)
+        table_texts = [chunk['text'] for chunk in table_chunks]
+        logger.info(f"Adding {len(table_texts)} structured table chunks")
+        
+        # Combine all chunks
+        all_chunks = windows + table_texts
+        all_sentences = central_sentences + table_texts  # Table chunks are self-contained
+        
+        # Step 5: Embed all chunks
+        logger.info(f"Embedding {len(all_sentences)} chunks...")
+        embeddings = embed_chunks(all_sentences, self.embedding_model)
+        
+        # Step 6: Store in vector database
+        logger.info("Adding to vector database...")
+        
+        current_count = self.collection.count()
+        ids = [f"enhanced_chunk_{current_count + i}" for i in range(len(all_chunks))]
+        
+        # Add metadata for table chunks
+        metadatas = []
+        for i, chunk in enumerate(all_chunks):
+            if i < len(windows):
+                metadatas.append({'type': 'sentence_window', 'index': i})
+            else:
+                table_idx = i - len(windows)
+                if table_idx < len(table_chunks):
+                    metadatas.append({
+                        'type': 'table_row',
+                        'source': table_chunks[table_idx].get('metadata', {}).get('source', ''),
+                        'page': table_chunks[table_idx].get('metadata', {}).get('page', 0)
+                    })
+                else:
+                    metadatas.append({'type': 'table_row', 'index': table_idx})
+        
+        self.collection.add(
+            embeddings=embeddings,
+            documents=all_chunks,
+            ids=ids,
+            metadatas=metadatas
+        )
+        
+        # Step 7: Update version records
+        if use_versioning and os.path.isdir(file_path):
+            for filepath in os.listdir(file_path):
+                full_path = os.path.join(file_path, filepath)
+                if os.path.isfile(full_path):
+                    version_manager.update_version(full_path)
+        
+        result = {
+            'status': 'success',
+            'message': 'Successfully processed with TABLE-AWARE extraction',
+            'documents_processed': len(documents_dict),
+            'sentence_windows_added': len(windows),
+            'table_chunks_added': len(table_texts),
+            'total_chunks_added': len(all_chunks),
+            'total_chunks_in_db': self.collection.count(),
+            'technique': 'table-aware + sentence-window',
+            'versioning_enabled': use_versioning
+        }
+        
+        logger.info(f"Table-aware ingestion complete: {result}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error during table-aware ingestion: {str(e)}", exc_info=True)
+        return {
+            'status': 'error',
+            'message': str(e),
+            'windows_added': 0
+        }
+
+
+@celery_app.task(bind=True, base=CallbackTask, name='ingestion_worker.incremental_update')
+def incremental_update(self, folder_path: str) -> Dict[str, any]:
+    """
+    Perform incremental update - only process changed documents.
+    
+    Uses document versioning to detect changes and only re-ingest
+    documents that have been added or modified.
+    """
+    logger.info(f"Starting incremental update for: {folder_path}")
+    
+    try:
+        version_manager = DocumentVersionManager()
+        changes = version_manager.get_changed_documents(folder_path)
+        
+        if not changes:
+            return {
+                'status': 'success',
+                'message': 'No changes detected - database is up to date',
+                'changes': {}
+            }
+        
+        # Process changes
+        results = {
+            'new': [],
+            'modified': [],
+            'deleted': []
+        }
+        
+        for filepath, change_type in changes.items():
+            if change_type == 'deleted':
+                results['deleted'].append(filepath)
+                version_manager.remove_version(filepath)
+            else:
+                results[change_type].append(filepath)
+        
+        # If there are new or modified files, process them
+        files_to_process = results['new'] + results['modified']
+        
+        if files_to_process:
+            # Process each file
+            loader = TableAwareLoader(dpi=2.0)
+            all_chunks = []
+            all_sentences = []
+            
+            for filepath in files_to_process:
+                if filepath.endswith('.pdf'):
+                    text, table_chunks = loader.load_pdf_with_tables(filepath)
+                    documents_dict = {os.path.basename(filepath): text}
+                    
+                    # Create sentence windows
+                    central_sentences, windows = chunk_text(documents_dict, window_size=3)
+                    
+                    all_chunks.extend(windows)
+                    all_sentences.extend(central_sentences)
+                    
+                    # Add table chunks
+                    for chunk in table_chunks:
+                        all_chunks.append(chunk['text'])
+                        all_sentences.append(chunk['text'])
+                    
+                    # Update version
+                    version_manager.update_version(filepath)
+            
+            if all_chunks:
+                # Embed and store
+                embeddings = embed_chunks(all_sentences, self.embedding_model)
+                
+                current_count = self.collection.count()
+                ids = [f"incr_chunk_{current_count + i}" for i in range(len(all_chunks))]
+                
+                self.collection.add(
+                    embeddings=embeddings,
+                    documents=all_chunks,
+                    ids=ids
+                )
+        
+        return {
+            'status': 'success',
+            'message': f'Incremental update complete',
+            'changes': {
+                'new_files': len(results['new']),
+                'modified_files': len(results['modified']),
+                'deleted_files': len(results['deleted'])
+            },
+            'chunks_added': len(all_chunks) if files_to_process else 0,
+            'total_chunks_in_db': self.collection.count()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error during incremental update: {str(e)}", exc_info=True)
         return {
             'status': 'error',
             'message': str(e)

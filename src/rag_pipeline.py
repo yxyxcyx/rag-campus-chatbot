@@ -384,6 +384,7 @@ def retrieve_and_rerank_hybrid(
 ) -> List[str]:
     """Hybrid retrieval with BM25 + Vector search when BM25 index is available.
     
+    Uses Reciprocal Rank Fusion (RRF) for better score combination.
     Falls back to enhanced vector-only retrieval if BM25 is not available.
     """
     # If BM25 index not available, fall back to enhanced vector retrieval
@@ -401,7 +402,6 @@ def retrieve_and_rerank_hybrid(
     tokenized_query = clean_query.lower().split()
     bm25_scores = bm25_index.get_scores(tokenized_query)
     bm25_top_indices = np.argsort(bm25_scores)[::-1][:n_initial]
-    bm25_results = {idx: bm25_scores[idx] for idx in bm25_top_indices if bm25_scores[idx] > 0}
     
     # Stage 1b: Vector retrieval
     query_embedding = embedding_model.embed_query(clean_query)
@@ -410,30 +410,31 @@ def retrieve_and_rerank_hybrid(
         n_results=n_initial,
     )
     
-    # Combine scores
-    combined_scores = {}
+    # Use Reciprocal Rank Fusion (RRF) for better score combination
+    # RRF score = sum(1 / (k + rank)) where k is a constant (typically 60)
+    k = 60
+    rrf_scores = {}
     
-    # Add BM25 scores
-    for idx, score in bm25_results.items():
-        if idx < len(documents):
-            combined_scores[documents[idx]] = bm25_weight * score
+    # Add BM25 RRF scores
+    for rank, idx in enumerate(bm25_top_indices):
+        if idx < len(documents) and bm25_scores[idx] > 0:
+            doc = documents[idx]
+            rrf_scores[doc] = rrf_scores.get(doc, 0) + bm25_weight * (1 / (k + rank + 1))
     
-    # Add vector scores  
+    # Add vector RRF scores
     if vector_results.get("documents") and vector_results["documents"][0]:
         retrieved_docs = vector_results["documents"][0]
-        distances = vector_results.get("distances", [[]])[0]
-        for doc, dist in zip(retrieved_docs, distances):
-            similarity = 1 - dist  # Convert distance to similarity
-            combined_scores[doc] = combined_scores.get(doc, 0) + vector_weight * similarity
+        for rank, doc in enumerate(retrieved_docs):
+            rrf_scores[doc] = rrf_scores.get(doc, 0) + vector_weight * (1 / (k + rank + 1))
     
-    # Sort by combined score
-    sorted_docs = sorted(combined_scores.items(), key=lambda x: x[1], reverse=True)
+    # Sort by RRF score
+    sorted_docs = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
     top_docs = [doc for doc, _ in sorted_docs[:n_initial]]
     
     if not top_docs:
         return []
     
-    # Stage 2: Cross-encoder reranking
+    # Stage 2: Cross-encoder reranking (this is the key step for quality)
     pairs = [[clean_query, doc] for doc in top_docs]
     scores = cross_encoder.predict(pairs)
     
@@ -560,27 +561,67 @@ class SemanticCache:
 # SECTION 7: RETRIEVAL & GENERATION
 # ============================================================================
 
+SYSTEM_MESSAGE = """You are an expert university information assistant for Xiamen University Malaysia (XMUM). Your role is to provide accurate, helpful information based on official university documents.
+
+## Core Principles:
+1. **Accuracy First**: Only provide information explicitly stated in the given context. Never invent or assume information.
+2. **Be Precise**: Use exact numbers, dates, fees, and requirements from the documents.
+3. **Structured Responses**: Use bullet points and clear formatting for complex information.
+4. **Cite Sources**: When mentioning specific facts, reference the source document if visible in context.
+
+## For Fee/Cost Questions:
+- Always include the exact amount (e.g., "RM 31,000")
+- Mention the programme duration if available
+- Specify if it's annual, per semester, or total cost
+- Note any conditions (local vs international students)
+
+## When You Don't Know:
+- Say "Based on the available documents, I don't have information about [topic]."
+- Don't guess or provide generic information."""
+
+
 @retry(
     stop=stop_after_attempt(5),
     retry=retry_if_exception_type((groq.RateLimitError, groq.APITimeoutError, groq.InternalServerError, Timeout))
 )
 def generate_response(context: str, query: str) -> str:
     """
-    Generate response using Groq LLM with optimized prompt
+    Generate response using Groq LLM with enhanced prompt engineering.
+    
+    Features:
+    - System message for consistent behavior
+    - Structured prompts for better accuracy
+    - Special handling for fee/cost queries
     """
-    prompt_template = f"""You are an expert assistant for a university campus. Answer the question based ONLY on the provided context.
-
-Context:
+    # Detect if this is a fee-related query for special handling
+    query_lower = query.lower()
+    is_fee_query = any(term in query_lower for term in ['fee', 'cost', 'tuition', 'price', 'rm ', 'ringgit'])
+    
+    # Build context-aware prompt
+    if is_fee_query:
+        special_instructions = """
+## Special Instructions for Fee Query:
+- Look for exact fee amounts in the format "RM XX,XXX"
+- Match the specific programme mentioned in the question
+- Include duration (e.g., "4 years") if available
+- Specify if the fee is annual or total
+- Note if it's for local or international students"""
+    else:
+        special_instructions = ""
+    
+    user_prompt = f"""## Relevant Documents:
 {context}
 
-Question: {query}
+{special_instructions}
 
-Instructions:
-1. Answer directly and concisely
-2. Use ONLY information from the context
-3. If the context doesn't contain the answer, say "I don't have enough information to answer this question based on the available documents."
-4. Cite specific details when possible (e.g., fees, dates, requirements)
-5. Be precise with numbers and requirements
+## Question: {query}
+
+## Instructions:
+1. Answer based ONLY on the provided documents above
+2. Be specific with numbers, dates, and requirements
+3. If the documents contain the answer, provide it clearly
+4. If the answer is not in the documents, say so explicitly
+5. For fees, always include the exact amount and any conditions
 
 Answer:"""
     
@@ -592,13 +633,17 @@ Answer:"""
     chat_completion = client.chat.completions.create(
         messages=[
             {
+                "role": "system",
+                "content": SYSTEM_MESSAGE,
+            },
+            {
                 "role": "user",
-                "content": prompt_template,
+                "content": user_prompt,
             }
         ],
-        model="llama-3.1-8b-instant",
+        model=settings.llm_model_name,
         temperature=0.1,  # Lower for more factual responses
-        max_tokens=1024,
+        max_tokens=1536,  # Increased for more complete responses
     )
     return chat_completion.choices[0].message.content
 

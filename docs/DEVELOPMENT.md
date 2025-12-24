@@ -156,18 +156,21 @@ rag-campus-chatbot/
 │   ├── app.py                    # Streamlit frontend
 │   ├── config.py                 # Centralized configuration (Pydantic)
 │   ├── logging_config.py         # Structured logging
-│   ├── rag_pipeline.py           # RAG pipeline + hybrid search
+│   ├── rag_pipeline.py           # RAG pipeline + hybrid search (RRF)
+│   ├── enhanced_rag_engine.py    # Query analysis, conversation memory, citations
 │   ├── ingestion_worker.py       # Celery worker for ingestion
 │   ├── celery_config.py          # Celery configuration
 │   ├── enhanced_document_loader.py  # OCR document loading
+│   ├── table_aware_loader.py     # Table extraction for PDFs
 │   └── sentence_window_retrieval.py # Sentence-window chunking
 ├── scripts/                      # Utility scripts
-│   ├── direct_ingest.py          # Direct ingestion (no Celery)
+│   ├── smart_ingest.py           # Smart ingestion with auto table detection
+│   ├── direct_ingest.py          # Basic ingestion (no table detection)
 │   ├── trigger_ingestion.py      # Celery-based ingestion
 │   ├── evaluate.py               # RAG evaluation (RAGAs)
 │   ├── check_metrics.py          # Performance gating
 │   ├── check_task_status.py      # Celery task monitoring
-│   └── shell/                    # Legacy shell scripts
+│   └── shell/                    # Shell scripts
 ├── tests/                        # All test files
 │   ├── test_architecture.py      # Architecture validation
 │   ├── test_system_evaluation.py # System evaluation tests
@@ -339,7 +342,7 @@ COLLECTION_NAME=collection
 - Improved boundary handling
 
 **Hybrid Search:**
-- BM25 keyword search + Vector similarity
+- BM25 keyword search + Vector similarity with Reciprocal Rank Fusion (RRF)
 - Cross-encoder reranking
 - Diversity filtering for result quality
 
