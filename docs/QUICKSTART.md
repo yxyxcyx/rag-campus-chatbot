@@ -186,7 +186,17 @@ docker run -p 6379:6379 redis:7-alpine
 
 ## Free Deployment Options
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for deploying to:
-- Streamlit Cloud (Free, easiest)
-- Railway (Free tier)
-- Render (Free tier)
+### Streamlit Cloud (Recommended - Free & Easiest)
+
+1. Push your code to GitHub
+2. Go to [share.streamlit.io](https://share.streamlit.io)
+3. Connect your GitHub repository
+4. Set the main file path to `streamlit_app.py`
+5. Add your `GROQ_API_KEY` in the Secrets section
+6. Deploy!
+
+The `streamlit_app.py` is a standalone version that doesn't require FastAPI or Redis.
+
+### Other Options
+- **Railway**: Free tier available, supports Docker
+- **Render**: Free tier available, supports Docker

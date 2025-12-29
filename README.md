@@ -15,19 +15,20 @@ A Retrieval-Augmented Generation (RAG) system for campus information queries, im
 - **Centralized Configuration**: Pydantic-validated settings with fail-fast startup
 - **Structured Logging**: JSON logging with request ID tracing
 
-### Enhanced User Experience (NEW)
+### Enhanced User Experience
 - **Conversation Memory**: Session-based context for follow-up questions
 - **Multi-Part Question Handling**: Detects and addresses "What are fees AND deadlines?" queries
 - **Ambiguous Query Detection**: Prompts for clarification when needed
 - **Citation Verification**: Filters and validates retrieved chunks
 - **Confidence Scoring**: Shows response reliability to users
-- **Improved Prompts**: Context-aware prompting with system messages
+- **Diversity Filtering**: Removes redundant results using word-overlap heuristic
+- **Anti-Hallucination Prompts**: Enhanced system prompts for accurate responses
 
-### Architecture
-- **Microservices**: FastAPI backend, Streamlit frontend, Celery workers, Redis, ChromaDB
+### Deployment Options
+- **Streamlit Cloud**: Standalone app (`streamlit_app.py`) with embedded RAG pipeline
+- **Docker Microservices**: FastAPI backend, Streamlit frontend, Celery workers, Redis, ChromaDB
 - **Async Processing**: Background document ingestion with Redis-backed task queue
 - **Optimized Dependencies**: Component-specific requirements for smaller builds
-- **Docker Ready**: Full containerization with dev/prod configurations
 
 ### Quality & Monitoring  
 - **RAGAs Evaluation**: Faithfulness, relevancy, recall, and precision metrics
@@ -121,7 +122,32 @@ make ingest-file FILE=data/handbook.pdf
 
 ## Architecture
 
-### Overview
+### Option 1: Streamlit Cloud (Standalone)
+
+For simple deployment on Streamlit Cloud, the app is self-contained:
+
+```
+┌─────────────┐         ┌──────────────────────────────────────┐
+│   Browser   │────────▶│  streamlit_app.py (Streamlit Cloud)  │
+│             │         │  ┌────────────────────────────────┐  │
+└─────────────┘         │  │  Embedded RAG Pipeline:        │  │
+                        │  │  • Hybrid Search (BM25+Vector) │  │
+                        │  │  • Cross-encoder Reranking     │  │
+                        │  │  • Query Analysis              │  │
+                        │  │  • Citation Verification       │  │
+                        │  │  • Groq LLM Generation         │  │
+                        │  └────────────────────────────────┘  │
+                        │              │                       │
+                        │              ▼                       │
+                        │  ┌────────────────────────────────┐  │
+                        │  │  ChromaDB (embedded)           │  │
+                        │  └────────────────────────────────┘  │
+                        └──────────────────────────────────────┘
+```
+
+### Option 2: Docker (Microservices)
+
+For production deployment with Docker:
 
 ```
 ┌─────────────┐         ┌──────────────┐
@@ -151,11 +177,13 @@ make ingest-file FILE=data/handbook.pdf
 4. **Enhanced RAG Engine (`enhanced_rag_engine.py`)**: Query analysis, conversation memory, citation verification
 5. **Table-Aware Loader (`table_aware_loader.py`)**: Specialized PDF table extraction
 6. **Sentence-Window Retrieval (`sentence_window_retrieval.py`)**: Chunking
-7. **Streamlit UI (`app.py`)**: User interface with session support
+7. **Streamlit UI**: Two versions available:
+   - `streamlit_app.py`: Standalone app for Streamlit Cloud (self-contained RAG pipeline)
+   - `src/app.py`: Docker version that calls FastAPI backend
 8. **ChromaDB**: Vector database for embeddings
 9. **Redis**: Message broker for Celery tasks
 
-**Note**: The FastAPI server serves both `/ask` (basic) and `/ask/enhanced` (with conversation memory) endpoints. Document ingestion is handled via `make ingest` which auto-detects tables in PDFs.
+**Note**: The FastAPI server provides a unified `/ask` endpoint with all enhanced features (conversation memory, query analysis, citation verification, confidence scoring). Document ingestion is handled via `make ingest` which auto-detects tables in PDFs.
 
 ---
 
@@ -164,9 +192,10 @@ make ingest-file FILE=data/handbook.pdf
 ```
 rag-campus-chatbot/
 ├── Makefile                      # Development commands (start here)
+├── streamlit_app.py              # Standalone Streamlit app (for Streamlit Cloud)
 ├── src/                          # Core application code
-│   ├── main.py                   # FastAPI server + API endpoints
-│   ├── app.py                    # Streamlit UI with session support
+│   ├── main.py                   # FastAPI server + unified /ask endpoint
+│   ├── app.py                    # Streamlit UI (Docker version, calls FastAPI)
 │   ├── config.py                 # Centralized configuration (Pydantic)
 │   ├── logging_config.py         # Structured logging with JSON output
 │   ├── rag_pipeline.py           # RAG pipeline + hybrid search
@@ -192,6 +221,7 @@ rag-campus-chatbot/
 │   └── ...
 ├── docs/                         # Documentation
 │   ├── DEVELOPMENT.md            # Development guide
+│   ├── QUICKSTART.md             # Quick start for beginners
 │   └── UI.png                    # UI screenshot
 ├── requirements/                 # Split requirements
 │   ├── base.txt                  # Common dependencies
@@ -200,6 +230,7 @@ rag-campus-chatbot/
 │   ├── ui.txt                    # Streamlit UI
 │   └── dev.txt                   # Development tools
 ├── data/                         # Document storage (gitignored)
+├── chroma_db/                    # Vector database (gitignored in production)
 ├── .env.example                  # Environment variables template
 ├── .gitignore                    # Git ignore rules
 ├── docker-compose.yml            # Production Docker config
@@ -210,6 +241,7 @@ rag-campus-chatbot/
 ├── Dockerfile.backend.dev        # Development backend
 ├── Dockerfile.frontend.dev       # Development frontend
 ├── Dockerfile.worker.dev         # Development worker
+├── requirements.txt              # Streamlit Cloud dependencies
 └── README.md                     # This file
 ```
 
@@ -260,8 +292,7 @@ The system supports document versioning. When you re-run ingestion:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/ask` | POST | Basic question answering |
-| `/ask/enhanced` | POST | Enhanced with conversation memory, multi-part handling |
+| `/ask` | POST | Question answering with all enhanced features (conversation memory, query analysis, citation verification, confidence scoring) |
 | `/analyze` | POST | Analyze query without generating response |
 
 ### Session Endpoints
@@ -271,16 +302,16 @@ The system supports document versioning. When you re-run ingestion:
 | `/session/{id}` | GET | Get session info (history, topics, entities) |
 | `/session/{id}` | DELETE | Clear session history |
 
-### Example: Enhanced Query with Session
+### Example: Query with Session
 
 ```bash
 # First question
-curl -X POST http://localhost:8000/ask/enhanced \
+curl -X POST http://localhost:8000/ask \
   -H "Content-Type: application/json" \
   -d '{"query": "What is the tuition fee for Data Science?", "session_id": "my-session"}'
 
 # Follow-up question (uses conversation context)
-curl -X POST http://localhost:8000/ask/enhanced \
+curl -X POST http://localhost:8000/ask \
   -H "Content-Type: application/json" \
   -d '{"query": "What about for international students?", "session_id": "my-session"}'
 ```
@@ -350,7 +381,46 @@ python scripts/check_metrics.py
 
 ---
 
+## Streamlit Cloud Deployment (Recommended for Quick Start)
+
+The easiest way to deploy is using Streamlit Cloud with the standalone `streamlit_app.py`:
+
+### Steps
+
+1. **Push to GitHub**: Ensure your code is in a GitHub repository
+
+2. **Go to Streamlit Cloud**: Visit [share.streamlit.io](https://share.streamlit.io)
+
+3. **Deploy**:
+   - Click "New app"
+   - Select your repository
+   - Set main file path: `streamlit_app.py`
+   - Click "Deploy"
+
+4. **Add Secrets**: In the app settings, add your secrets:
+   ```toml
+   GROQ_API_KEY = "your_groq_api_key_here"
+   ```
+
+### Features in Streamlit Cloud Version
+
+The standalone `streamlit_app.py` includes all enhanced features:
+- ✅ Hybrid search (BM25 + Vector with RRF)
+- ✅ Cross-encoder reranking
+- ✅ Query analysis (multi-part, ambiguity detection)
+- ✅ Citation verification
+- ✅ Diversity filtering
+- ✅ Confidence scoring
+- ✅ Conversation memory (session-based)
+- ✅ Enhanced anti-hallucination prompts
+
+**Note**: The ChromaDB is embedded and persists with the app. Documents in `chroma_db/` are included in the deployment.
+
+---
+
 ## Docker Deployment
+
+For production or local development with full microservices:
 
 ```bash
 # Build and start all services
@@ -562,6 +632,7 @@ answer_relevancy    : 0.XX (threshold: 0.70)
 ## Documentation
 
 - `README.md`: Overview, quick start, architecture, and deployment.
+- `docs/QUICKSTART.md`: Step-by-step guide for beginners.
 - `docs/DEVELOPMENT.md`: Detailed local development and Docker-based development guide.
 
 ---

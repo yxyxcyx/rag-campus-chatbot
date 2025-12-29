@@ -151,9 +151,10 @@ make ui           # Start Streamlit frontend
 ```
 rag-campus-chatbot/
 ├── Makefile                      # Development commands (start here!)
+├── streamlit_app.py              # Standalone Streamlit app (for Streamlit Cloud)
 ├── src/                          # Core application code
-│   ├── main.py                   # FastAPI backend + API endpoints
-│   ├── app.py                    # Streamlit frontend
+│   ├── main.py                   # FastAPI backend + unified /ask endpoint
+│   ├── app.py                    # Streamlit frontend (Docker, calls FastAPI)
 │   ├── config.py                 # Centralized configuration (Pydantic)
 │   ├── logging_config.py         # Structured logging
 │   ├── rag_pipeline.py           # RAG pipeline + hybrid search (RRF)
@@ -177,6 +178,7 @@ rag-campus-chatbot/
 │   └── ...
 ├── docs/                         # Documentation
 │   ├── DEVELOPMENT.md            # This file
+│   ├── QUICKSTART.md             # Quick start for beginners
 │   └── UI.png                    # Screenshot
 ├── requirements/                 # Split dependencies
 │   ├── base.txt                  # Common dependencies
@@ -185,6 +187,8 @@ rag-campus-chatbot/
 │   ├── ui.txt                    # Streamlit UI
 │   └── dev.txt                   # Development tools
 ├── data/                         # Document storage (gitignored)
+├── chroma_db/                    # Vector database storage
+├── requirements.txt              # Streamlit Cloud dependencies
 ├── docker-compose.yml            # Production Docker config
 ├── docker-compose.dev.yml        # Development Docker config
 └── Dockerfile.*                  # Container definitions
