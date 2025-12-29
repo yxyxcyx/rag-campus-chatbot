@@ -20,8 +20,7 @@ import uuid
 
 # SECTION 1: API Configuration
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
-ASK_ENDPOINT = f"{API_BASE_URL}/ask/enhanced"  # Use enhanced endpoint
-ASK_BASIC_ENDPOINT = f"{API_BASE_URL}/ask"  # Fallback to basic endpoint
+ASK_ENDPOINT = f"{API_BASE_URL}/ask"  # Unified endpoint with all enhanced features
 
 # Page Configuration
 st.set_page_config(
@@ -39,10 +38,6 @@ if "session_id" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-if "use_enhanced" not in st.session_state:
-    st.session_state.use_enhanced = True
-
-
 # SECTION 3: UI HEADER
 st.title("🎓 XMUM AI Campus Chatbot")
 st.markdown("""
@@ -53,11 +48,6 @@ Ask me anything about campus rules, academic policies, fees, or procedures.
 # Sidebar for settings
 with st.sidebar:
     st.header("⚙️ Settings")
-    st.session_state.use_enhanced = st.checkbox(
-        "Enhanced Mode", 
-        value=st.session_state.use_enhanced,
-        help="Enable conversation memory, multi-part questions, and confidence scores"
-    )
     
     if st.button("🗑️ Clear Conversation"):
         st.session_state.messages = []
@@ -106,45 +96,30 @@ if prompt := st.chat_input("Ask a question about XMUM..."):
             metadata = {}
             
             try:
-                if st.session_state.use_enhanced:
-                    # Use enhanced endpoint with session ID
-                    request_data = {
-                        "query": prompt,
-                        "session_id": st.session_state.session_id
+                # Use unified /ask endpoint with all enhanced features
+                request_data = {
+                    "query": prompt,
+                    "session_id": st.session_state.session_id
+                }
+                response = requests.post(ASK_ENDPOINT, json=request_data, timeout=90)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    full_response = data.get("response", "Sorry, I couldn't find an answer.")
+                    metadata = {
+                        "sources": data.get("sources", []),
+                        "confidence": data.get("confidence", 1.0),
+                        "needs_clarification": data.get("needs_clarification", False),
+                        "clarification_prompt": data.get("clarification_prompt"),
+                        "query_analysis": data.get("query_analysis", {}),
                     }
-                    response = requests.post(ASK_ENDPOINT, json=request_data, timeout=90)
                     
-                    if response.status_code == 200:
-                        data = response.json()
-                        full_response = data.get("response", "Sorry, I couldn't find an answer.")
-                        metadata = {
-                            "sources": data.get("sources", []),
-                            "confidence": data.get("confidence", 1.0),
-                            "needs_clarification": data.get("needs_clarification", False),
-                            "clarification_prompt": data.get("clarification_prompt"),
-                        }
-                        
-                        # If clarification is needed, add it to the response
-                        if metadata.get("needs_clarification") and metadata.get("clarification_prompt"):
-                            full_response += f"\n\n💡 **Clarification needed:** {metadata['clarification_prompt']}"
-                    else:
-                        # Fallback to basic endpoint
-                        request_data = {"query": prompt}
-                        response = requests.post(ASK_BASIC_ENDPOINT, json=request_data, timeout=60)
-                        if response.status_code == 200:
-                            full_response = response.json().get("response", "Sorry, I couldn't find an answer.")
-                        else:
-                            full_response = f"Error: Server responded with status {response.status_code}."
+                    # If clarification is needed, add it to the response
+                    if metadata.get("needs_clarification") and metadata.get("clarification_prompt"):
+                        full_response += f"\n\n💡 **Clarification needed:** {metadata['clarification_prompt']}"
                 else:
-                    # Basic mode
-                    request_data = {"query": prompt}
-                    response = requests.post(ASK_BASIC_ENDPOINT, json=request_data, timeout=60)
-                    
-                    if response.status_code == 200:
-                        full_response = response.json().get("response", "Sorry, I couldn't find an answer.")
-                    else:
-                        error_details = response.text
-                        full_response = f"Error: Status {response.status_code}. {error_details}"
+                    error_details = response.text
+                    full_response = f"Error: Status {response.status_code}. {error_details}"
             
             except requests.exceptions.Timeout:
                 full_response = "⏱️ Request timed out. Please try again with a simpler question."

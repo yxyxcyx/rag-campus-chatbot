@@ -5,9 +5,14 @@ FastAPI Application - Stateless API Server
 
 This script serves a RESTful API to interact with the RAG pipeline.
 
-ARCHITECTURE CHANGE:
-This API server is now STATELESS and follows the read-only pattern.
-It ONLY serves queries via the `/ask` endpoint.
+ARCHITECTURE:
+This API server is STATELESS and follows the read-only pattern.
+It serves queries via the `/ask` endpoint with full enhanced features:
+- Multi-part question handling
+- Ambiguous query detection  
+- Conversation memory and follow-up support
+- Citation verification
+- Confidence scoring
 
 Data ingestion is handled separately by Celery workers (see ingestion_worker.py).
 To ingest documents, use trigger_ingestion.py script.
@@ -34,7 +39,6 @@ from logging_config import setup_logging, get_logger, set_request_id
 from rag_pipeline import (
     retrieve_and_rerank,
     retrieve_and_rerank_hybrid,
-    generate_response
 )
 from enhanced_rag_engine import (
     EnhancedRAGEngine,
@@ -191,22 +195,17 @@ class Question(BaseModel):
     session_id: Optional[str] = Field(default=None, description="Session ID for conversation memory")
 
 class Answer(BaseModel):
+    """
+    Unified response model with all enhanced features.
+    """
     response: str
-    sources: Optional[List[str]] = Field(default=None, description="Source documents used")
-    session_id: Optional[str] = Field(default=None, description="Session ID for follow-up questions")
-    confidence: Optional[float] = Field(default=None, description="Response confidence score")
-    needs_clarification: Optional[bool] = Field(default=False, description="Whether clarification is needed")
+    sources: List[str] = Field(default_factory=list, description="Source documents used")
+    session_id: str = Field(description="Session ID for follow-up questions")
+    confidence: float = Field(default=1.0, description="Response confidence score (0.0-1.0)")
+    needs_clarification: bool = Field(default=False, description="Whether clarification is needed")
     clarification_prompt: Optional[str] = Field(default=None, description="Clarification question if needed")
-
-class EnhancedAnswer(BaseModel):
-    response: str
-    sources: List[str] = Field(default_factory=list)
-    session_id: str
-    confidence: float
-    needs_clarification: bool = False
-    clarification_prompt: Optional[str] = None
-    query_analysis: Optional[Dict[str, Any]] = None
-    answered_parts: Optional[List[str]] = None  # For multi-part questions
+    query_analysis: Optional[Dict[str, Any]] = Field(default=None, description="Query analysis details")
+    answered_parts: Optional[List[str]] = Field(default=None, description="Answered parts for multi-part questions")
 
 class SessionInfo(BaseModel):
     session_id: str
@@ -227,30 +226,37 @@ def read_root():
 @app.post("/ask", response_model=Answer, summary="Ask a Question")
 def ask_question(question: Question, request: Request):
     """
-    Receives a user query, runs it through the full RAG pipeline,
-    and returns the generated answer.
+    Ask a question with full enhanced RAG features:
+    - Multi-part question handling
+    - Ambiguous query detection
+    - Conversation memory and follow-up support
+    - Citation verification
+    - Confidence scoring
     
-    Uses hybrid search (BM25 + Vector) if enabled, otherwise uses enhanced vector search.
-    Both methods include diversity filtering to reduce redundancy.
+    Uses hybrid search (BM25 + Vector) if enabled, with cross-encoder reranking
+    and diversity filtering.
+    
+    Pass a session_id to enable conversation memory for follow-up questions.
     
     Returns:
-        200: Successful response with answer
+        200: Successful response with answer, sources, confidence, and analysis
         503: Service unavailable (LLM timeout or overload)
         500: Internal server error
     """
     user_query = question.query
+    session_id = question.session_id or str(uuid.uuid4())
     request_id = getattr(request.state, "request_id", "unknown")
     
-    # Log with structured metadata
     logger.info(
         "Query received",
         query_length=len(user_query),
+        session_id=session_id,
         request_id=request_id,
         hybrid_search=ENABLE_HYBRID_SEARCH
     )
     
     try:
-        # 1. Retrieve and rerank with appropriate method
+        # 1. Retrieve chunks using hybrid or vector search
         if ENABLE_HYBRID_SEARCH and bm25_index is not None:
             logger.info("Using hybrid retrieval", method="bm25+vector")
             retrieved_chunks = retrieve_and_rerank_hybrid(
@@ -281,182 +287,8 @@ def ask_question(question: Question, request: Request):
             )
         
         logger.info("Retrieval complete", chunks_retrieved=len(retrieved_chunks))
-        retrieved_context = "\n\n".join(retrieved_chunks)
         
-        # 2. Generate response with error handling
-        logger.info("Generating LLM response")
-        try:
-            final_answer = generate_response(retrieved_context, user_query)
-        except groq.APITimeoutError as e:
-            logger.error(
-                "LLM timeout",
-                exc_info=True,
-                timeout_seconds=settings.llm_timeout_seconds
-            )
-            raise HTTPException(
-                status_code=503,
-                detail={
-                    "message": "AI service is temporarily unavailable. Please try again in a moment.",
-                    "error_code": "LLM_TIMEOUT",
-                    "request_id": request_id,
-                    "retry_after": 5
-                }
-            )
-        except groq.RateLimitError as e:
-            logger.warning(
-                "LLM rate limit exceeded",
-                error=str(e)
-            )
-            raise HTTPException(
-                status_code=503,
-                detail={
-                    "message": "AI service is busy. Please try again in a few seconds.",
-                    "error_code": "RATE_LIMITED",
-                    "request_id": request_id,
-                    "retry_after": 10
-                }
-            )
-        except groq.APIConnectionError as e:
-            logger.error(
-                "LLM connection failed",
-                exc_info=True,
-                error=str(e)
-            )
-            raise HTTPException(
-                status_code=503,
-                detail={
-                    "message": "Cannot connect to AI service. Please try again later.",
-                    "error_code": "LLM_CONNECTION_ERROR",
-                    "request_id": request_id
-                }
-            )
-        except groq.InternalServerError as e:
-            logger.error(
-                "LLM internal error",
-                exc_info=True,
-                error=str(e)
-            )
-            raise HTTPException(
-                status_code=503,
-                detail={
-                    "message": "AI service encountered an error. Please try again.",
-                    "error_code": "LLM_INTERNAL_ERROR",
-                    "request_id": request_id
-                }
-            )
-        
-        logger.info(
-            "Query processed successfully",
-            response_length=len(final_answer),
-            request_id=request_id
-        )
-        
-        return {"response": final_answer}
-    
-    except HTTPException:
-        # Re-raise HTTP exceptions as-is
-        raise
-    except chromadb.errors.ChromaError as e:
-        logger.error(
-            "Database error",
-            exc_info=True,
-            error_type=type(e).__name__
-        )
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "message": "Database error occurred. Please contact support.",
-                "error_code": "DATABASE_ERROR",
-                "request_id": request_id
-            }
-        )
-    except (Timeout, ConnectionError) as e:
-        logger.error(
-            "Network error during processing",
-            exc_info=True,
-            error=str(e)
-        )
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "message": "Service temporarily unavailable due to network issues.",
-                "error_code": "NETWORK_ERROR",
-                "request_id": request_id
-            }
-        )
-    except Exception as e:
-        # Log full stack trace internally, return sanitized message
-        logger.error(
-            "Unexpected error during query processing",
-            exc_info=True,
-            error_type=type(e).__name__,
-            error=str(e)
-        )
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "message": "An unexpected error occurred. Please try again.",
-                "error_code": "INTERNAL_ERROR",
-                "request_id": request_id
-            }
-        )
-
-
-@app.post("/ask/enhanced", response_model=EnhancedAnswer, summary="Ask with Enhanced Features")
-def ask_enhanced(question: Question, request: Request):
-    """
-    Enhanced question answering with all improvements:
-    - Multi-part question handling
-    - Ambiguous query detection
-    - Conversation memory and follow-up support
-    - Citation verification
-    - Confidence scoring
-    
-    Pass a session_id to enable conversation memory for follow-up questions.
-    """
-    user_query = question.query
-    session_id = question.session_id or str(uuid.uuid4())
-    request_id = getattr(request.state, "request_id", "unknown")
-    
-    logger.info(
-        "Enhanced query received",
-        query_length=len(user_query),
-        session_id=session_id,
-        request_id=request_id
-    )
-    
-    try:
-        # 1. Retrieve chunks first (using existing retrieval)
-        if ENABLE_HYBRID_SEARCH and bm25_index is not None:
-            retrieved_chunks = retrieve_and_rerank_hybrid(
-                user_query, 
-                embedding_model, 
-                collection, 
-                cross_encoder,
-                bm25_index=bm25_index,
-                documents=all_documents,
-                n_initial=30,
-                n_final=settings.n_final_results,
-                bm25_weight=BM25_WEIGHT,
-                vector_weight=VECTOR_WEIGHT,
-                use_diversity_filter=USE_DIVERSITY_FILTER,
-                diversity_threshold=DIVERSITY_THRESHOLD
-            )
-        else:
-            retrieved_chunks = retrieve_and_rerank(
-                user_query, 
-                embedding_model, 
-                collection, 
-                cross_encoder,
-                n_initial=settings.n_initial_retrieval,
-                n_final=settings.n_final_results,
-                use_diversity_filter=USE_DIVERSITY_FILTER,
-                diversity_threshold=DIVERSITY_THRESHOLD
-            )
-        
-        logger.info("Retrieval complete", chunks_retrieved=len(retrieved_chunks))
-        
-        # 2. Process through enhanced RAG engine
+        # 2. Process through enhanced RAG engine (with all guardrails)
         result = enhanced_rag_engine.query(
             user_query=user_query,
             session_id=session_id,
@@ -464,13 +296,13 @@ def ask_enhanced(question: Question, request: Request):
         )
         
         logger.info(
-            "Enhanced query processed",
+            "Query processed",
             confidence=result.get('confidence', 0),
             sources_count=len(result.get('sources', [])),
             request_id=request_id
         )
         
-        return EnhancedAnswer(
+        return Answer(
             response=result['response'],
             sources=result.get('sources', []),
             session_id=session_id,
@@ -506,9 +338,37 @@ def ask_enhanced(question: Question, request: Request):
                 "request_id": request_id
             }
         )
+    except chromadb.errors.ChromaError as e:
+        logger.error(
+            "Database error",
+            exc_info=True,
+            error_type=type(e).__name__
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": "Database error occurred. Please contact support.",
+                "error_code": "DATABASE_ERROR",
+                "request_id": request_id
+            }
+        )
+    except (Timeout, ConnectionError) as e:
+        logger.error(
+            "Network error during processing",
+            exc_info=True,
+            error=str(e)
+        )
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "message": "Service temporarily unavailable due to network issues.",
+                "error_code": "NETWORK_ERROR",
+                "request_id": request_id
+            }
+        )
     except Exception as e:
         logger.error(
-            "Error in enhanced query processing",
+            "Error in query processing",
             exc_info=True,
             error_type=type(e).__name__,
             error=str(e)

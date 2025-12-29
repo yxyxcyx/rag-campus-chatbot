@@ -4,11 +4,15 @@ Streamlit Cloud App - Self-contained RAG Chatbot
 This is a standalone version of the XMUM AI Chatbot designed for Streamlit Community Cloud.
 It embeds the RAG pipeline directly without requiring external services (FastAPI, Redis, Celery).
 
-Features retained:
+Full Enhanced Features:
 - Hybrid search (BM25 + Vector with RRF)
 - Cross-encoder reranking
+- Diversity filtering (word-overlap heuristic)
+- Query analysis (multi-part, ambiguity detection, intent classification)
+- Citation verification
 - Confidence scoring
 - Conversation memory (session-based)
+- Enhanced anti-hallucination system prompt
 - Table-aware document retrieval
 """
 
@@ -32,6 +36,7 @@ from rank_bm25 import BM25Okapi
 import re
 import uuid
 import nltk
+from typing import List, Dict, Tuple, Optional
 
 # Download NLTK data
 try:
@@ -208,6 +213,204 @@ def rerank_results(query: str, results: list, cross_encoder, top_k: int = 5):
     return reranked[:top_k]
 
 
+def diversity_filter(results: List[Dict], threshold: float = 0.85) -> List[Dict]:
+    """
+    Remove near-duplicate documents for diversity using word-overlap heuristic.
+    
+    Args:
+        results: List of result dictionaries with 'document' key
+        threshold: Similarity threshold (0.0-1.0), higher = more filtering
+    
+    Returns:
+        Filtered list of results
+    """
+    if len(results) <= 1:
+        return results
+    
+    filtered = [results[0]]
+    
+    for result in results[1:]:
+        doc = result.get("document", "")
+        is_duplicate = False
+        
+        for filtered_result in filtered:
+            filtered_doc = filtered_result.get("document", "")
+            
+            # Word-overlap similarity
+            words_a = set(doc.lower().split())
+            words_b = set(filtered_doc.lower().split())
+            
+            if not words_a or not words_b:
+                continue
+            
+            overlap = len(words_a & words_b) / min(len(words_a), len(words_b))
+            if overlap > threshold:
+                is_duplicate = True
+                break
+        
+        if not is_duplicate:
+            filtered.append(result)
+    
+    return filtered
+
+
+# =============================================================================
+# QUERY ANALYSIS
+# =============================================================================
+
+class QueryAnalyzer:
+    """Analyzes user queries for multi-part questions, ambiguity, and intent."""
+    
+    AMBIGUOUS_TERMS = {
+        'fees': ['tuition fees', 'application fees', 'registration fees', 'examination fees'],
+        'deadline': ['application deadline', 'registration deadline', 'payment deadline'],
+        'requirements': ['admission requirements', 'graduation requirements', 'course requirements'],
+        'program': ['undergraduate program', 'postgraduate program', 'diploma program'],
+        'scholarship': ['merit scholarship', 'need-based scholarship', 'sports scholarship'],
+        'student': ['local student', 'international student', 'part-time student'],
+    }
+    
+    MULTI_PART_INDICATORS = [
+        r'\band\b',
+        r'\balso\b',
+        r'\bas well as\b',
+        r'\badditionally\b',
+        r'\bwhat about\b',
+        r'\bhow about\b',
+        r'\?.*\?',
+    ]
+    
+    def __init__(self):
+        self.intent_patterns = {
+            'fee_inquiry': [
+                r'(?:how much|what is|what are).*(?:fee|cost|price|tuition)',
+                r'(?:fee|tuition|cost).*(?:for|of)',
+            ],
+            'deadline_inquiry': [
+                r'(?:when|what).*(?:deadline|due date|last date)',
+            ],
+            'requirement_inquiry': [
+                r'(?:what|which).*(?:require|need|prerequisite)',
+                r'(?:how to|how do).*(?:apply|register|enroll)',
+            ],
+            'general_info': [
+                r'(?:tell me about|what is|explain|describe)',
+            ],
+        }
+    
+    def analyze(self, query: str) -> Dict:
+        """Analyze a query and return analysis results."""
+        query_lower = query.lower()
+        
+        # Detect multi-part
+        is_multi_part = any(
+            re.search(pattern, query_lower) 
+            for pattern in self.MULTI_PART_INDICATORS
+        )
+        
+        # Detect ambiguity
+        ambiguous_terms = []
+        for term, options in self.AMBIGUOUS_TERMS.items():
+            if term in query_lower:
+                specific_found = any(opt.lower() in query_lower for opt in options)
+                if not specific_found:
+                    ambiguous_terms.append({'term': term, 'options': options})
+        
+        # Classify intent
+        intent = 'general_info'
+        for intent_name, patterns in self.intent_patterns.items():
+            if any(re.search(p, query_lower) for p in patterns):
+                intent = intent_name
+                break
+        
+        # Calculate confidence
+        confidence = 1.0
+        if ambiguous_terms:
+            confidence -= 0.2 * len(ambiguous_terms)
+        if is_multi_part:
+            confidence -= 0.1
+        if len(query.split()) < 3:
+            confidence -= 0.2
+        
+        return {
+            'is_multi_part': is_multi_part,
+            'is_ambiguous': len(ambiguous_terms) > 0,
+            'ambiguous_terms': ambiguous_terms,
+            'intent': intent,
+            'confidence': max(0.0, min(1.0, confidence)),
+        }
+
+
+# =============================================================================
+# CITATION VERIFICATION
+# =============================================================================
+
+def verify_citations(query: str, results: List[Dict], query_analysis: Dict = None) -> Dict:
+    """
+    Verify and filter citations for quality and relevance.
+    
+    Returns dict with verified_results, rejected_results, and sources.
+    """
+    if not results:
+        return {'verified_results': [], 'rejected_results': [], 'sources': []}
+    
+    query_lower = query.lower()
+    query_keywords = set(query_lower.split())
+    
+    verified = []
+    rejected = []
+    sources = []
+    
+    for result in results:
+        doc = result.get("document", "")
+        doc_lower = doc.lower()
+        doc_words = set(doc_lower.split())
+        
+        # Calculate relevance score
+        overlap = len(query_keywords & doc_words)
+        keyword_score = overlap / max(len(query_keywords), 1)
+        
+        # Partial match bonus
+        partial_matches = sum(1 for kw in query_keywords if len(kw) > 3 and kw in doc_lower)
+        partial_score = partial_matches / max(len(query_keywords), 1)
+        
+        # Intent-based scoring
+        intent_score = 0.0
+        if query_analysis:
+            intent = query_analysis.get('intent', '')
+            if intent == 'fee_inquiry' and re.search(r'RM\s*[\d,]+', doc):
+                intent_score = 0.3
+            elif intent == 'deadline_inquiry' and re.search(r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}', doc):
+                intent_score = 0.3
+        
+        # Length score
+        length_score = min(1.0, len(doc) / 200)
+        
+        # Final score
+        final_score = max(keyword_score, partial_score * 0.8) * 0.5 + intent_score * 0.3 + length_score * 0.2
+        
+        if final_score >= 0.15:
+            result['relevance_score'] = final_score
+            verified.append(result)
+            
+            # Extract source
+            metadata = result.get("metadata", {})
+            source = metadata.get("source", metadata.get("file_name", ""))
+            if source:
+                if "/" in source:
+                    source = source.split("/")[-1]
+                if source not in sources:
+                    sources.append(source)
+        else:
+            rejected.append(result)
+    
+    return {
+        'verified_results': verified,
+        'rejected_results': rejected,
+        'sources': sources,
+    }
+
+
 def calculate_confidence(answer: str, results: list) -> float:
     """Calculate confidence score based on answer quality and retrieval."""
     confidence = 0.85  # Base confidence
@@ -248,33 +451,62 @@ def calculate_confidence(answer: str, results: list) -> float:
     return max(0.1, min(1.0, confidence))
 
 
-def generate_response(query: str, context: str, groq_client, conversation_history: list = None):
-    """Generate response using Groq LLM."""
+def generate_response(query: str, context: str, groq_client, conversation_history: list = None, query_analysis: Dict = None):
+    """Generate response using Groq LLM with enhanced anti-hallucination prompt."""
     
-    # Build conversation context
-    messages = [
-        {
-            "role": "system",
-            "content": """You are a helpful AI assistant for XMUM (Xiamen University Malaysia) campus.
-Answer questions based on the provided context. Be accurate and helpful.
-If the context doesn't contain the answer, say so honestly.
-For fee-related questions, always mention the specific amounts if available.
-Keep responses concise but complete."""
-        }
-    ]
+    # Enhanced system message matching the FastAPI enhanced engine
+    system_message = """You are an expert university information assistant for Xiamen University Malaysia (XMUM). Your role is to provide accurate, helpful information about the university based on official documents.
+
+## Core Principles:
+1. **Accuracy First**: Only provide information that is explicitly stated in the given context. Never invent or assume information.
+2. **Cite Sources**: When mentioning specific facts (fees, dates, requirements), indicate which document they come from.
+3. **Be Precise**: Use exact numbers, dates, and requirements from the documents.
+4. **Be Helpful**: If information is incomplete, acknowledge what you know and what's missing.
+5. **Handle Uncertainty**: If information is ambiguous or contradictory, explain the different possibilities.
+
+## Response Format:
+- Start with a direct answer to the question
+- Include specific details (amounts, dates, requirements) when available
+- Keep responses concise but complete
+- For fee queries, always include the exact amount in RM format
+
+## When You Don't Know:
+- Say "Based on the available documents, I don't have information about [topic]."
+- Don't guess or provide generic information
+- Suggest what information might help answer the question"""
+
+    messages = [{"role": "system", "content": system_message}]
     
     # Add conversation history for context
     if conversation_history:
         for msg in conversation_history[-4:]:  # Last 2 exchanges
             messages.append({"role": msg["role"], "content": msg["content"]})
     
-    # Add current query with context
-    user_message = f"""Context from XMUM documents:
+    # Build context-aware prompt
+    special_instructions = ""
+    if query_analysis and query_analysis.get('intent') == 'fee_inquiry':
+        special_instructions = """
+## Special Instructions for Fee Query:
+- Look for exact fee amounts in the format "RM XX,XXX"
+- Match the specific programme mentioned in the question
+- Include duration (e.g., "4 years") if available
+- Specify if the fee is annual or total
+- Note if it's for local or international students"""
+    
+    user_message = f"""## Relevant Documents:
 {context}
+{special_instructions}
 
-Question: {query}
+## Question: {query}
 
-Please answer based on the context above. If the information is not in the context, say so."""
+## Instructions:
+1. Answer based ONLY on the provided documents above
+2. Be specific with numbers, dates, and requirements
+3. If the documents contain the answer, provide it clearly
+4. If the answer is not in the documents, say so explicitly
+5. For fees, always include the exact amount and any conditions
+
+Answer:"""
     
     messages.append({"role": "user", "content": user_message})
     
@@ -283,7 +515,7 @@ Please answer based on the context above. If the information is not in the conte
             model="llama-3.1-8b-instant",
             messages=messages,
             temperature=0.1,
-            max_tokens=1024
+            max_tokens=1536
         )
         return response.choices[0].message.content
     except Exception as e:
@@ -414,43 +646,67 @@ def main():
         # Generate response
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
-                # 1. Hybrid search
+                # 1. Query analysis
+                analyzer = QueryAnalyzer()
+                query_analysis = analyzer.analyze(prompt)
+                
+                # 2. Hybrid search
                 results = hybrid_search(
                     prompt, collection, bm25, doc_data, 
-                    embedding_model, top_k=10
+                    embedding_model, top_k=15
                 )
                 
-                # 2. Rerank
-                reranked = rerank_results(prompt, results, cross_encoder, top_k=5)
+                # 3. Rerank
+                reranked = rerank_results(prompt, results, cross_encoder, top_k=8)
                 
-                # 3. Build context
-                context = "\n\n---\n\n".join([r["document"] for r in reranked])
+                # 4. Diversity filter
+                diverse_results = diversity_filter(reranked, threshold=0.85)
                 
-                # 4. Generate response
+                # 5. Citation verification
+                citation_result = verify_citations(prompt, diverse_results, query_analysis)
+                verified_results = citation_result['verified_results']
+                
+                # Use verified results if available, otherwise fall back to diverse results
+                final_results = verified_results if verified_results else diverse_results[:5]
+                
+                # 6. Build context
+                context = "\n\n---\n\n".join([r["document"] for r in final_results])
+                
+                # 7. Generate response with query analysis
                 conversation_history = [
                     {"role": m["role"], "content": m["content"]} 
                     for m in st.session_state.messages[:-1]  # Exclude current
                 ]
-                answer = generate_response(prompt, context, groq_client, conversation_history)
+                answer = generate_response(prompt, context, groq_client, conversation_history, query_analysis)
                 
-                # 5. Calculate confidence
-                confidence = calculate_confidence(answer, reranked)
+                # 8. Calculate confidence
+                confidence = calculate_confidence(answer, final_results)
                 
-                # 6. Extract sources
-                sources = extract_sources(reranked)
+                # 9. Extract sources (from citation verification or fallback)
+                sources = citation_result['sources'] if citation_result['sources'] else extract_sources(final_results)
                 
                 # Display
                 st.markdown(answer)
                 
                 metadata = {
                     "sources": sources,
-                    "confidence": confidence
+                    "confidence": confidence,
+                    "query_analysis": query_analysis
                 }
                 
                 if sources:
                     with st.expander("Sources"):
                         for source in sources:
                             st.caption(f"• {source}")
+                
+                # Show query analysis info if relevant
+                if query_analysis.get('is_multi_part') or query_analysis.get('is_ambiguous'):
+                    with st.expander("Query Analysis"):
+                        if query_analysis.get('is_multi_part'):
+                            st.caption("ℹ️ Multi-part question detected")
+                        if query_analysis.get('is_ambiguous'):
+                            st.caption(f"⚠️ Ambiguous terms: {', '.join([t['term'] for t in query_analysis.get('ambiguous_terms', [])])}")
+                        st.caption(f"Intent: {query_analysis.get('intent', 'general')}")
                 
                 color = "green" if confidence > 0.7 else "orange" if confidence > 0.4 else "red"
                 st.caption(f"Confidence: :{color}[{confidence:.0%}]")
